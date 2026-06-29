@@ -38,6 +38,7 @@ import javafx.stage.Stage;
 import javax.swing.SwingUtilities;
 import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -277,64 +278,95 @@ public class MetricsAnalyzerApp extends Application {
         }
 
         Set<String> edgeKeys = new LinkedHashSet<>();
+        Set<String> allNodes = new LinkedHashSet<>();
         for (DependencyRelation relation : relations) {
             edgeKeys.add(edgeKey(relation.getSource(), relation.getTarget()));
+            allNodes.add(relation.getSource());
+            allNodes.add(relation.getTarget());
         }
 
-        mxGraph graph = new mxGraph();
-        Object parent = graph.getDefaultParent();
-        Map<String, Object> vertices = new LinkedHashMap<>();
+        List<String> sortedNodes = new ArrayList<>(allNodes);
+        sortedNodes.sort((a, b) -> {
+            String[] partsA = a.split("\\.");
+            String[] partsB = b.split("\\.");
+            int minLen = Math.min(partsA.length, partsB.length);
+            for (int i = 0; i < minLen; i++) {
+                boolean aIsDir = i < partsA.length - 1 || packageLevel;
+                boolean bIsDir = i < partsB.length - 1 || packageLevel;
+                if (aIsDir != bIsDir) {
+                    return aIsDir ? -1 : 1;
+                }
+                int cmp = partsA[i].compareTo(partsB[i]);
+                if (cmp != 0) return cmp;
+            }
+            return Integer.compare(partsA.length, partsB.length);
+        });
 
-        graph.getModel().beginUpdate();
-        try {
-            for (DependencyRelation relation : relations) {
-                vertices.computeIfAbsent(relation.getSource(),
-                        key -> graph.insertVertex(parent, null, shortLabel(key), 0, 0, 190, 55, NODE_STYLE));
-                vertices.computeIfAbsent(relation.getTarget(),
-                        key -> graph.insertVertex(parent, null, shortLabel(key), 0, 0, 190, 55, NODE_STYLE));
+        SwingUtilities.invokeLater(() -> {
+            mxGraph graph = new mxGraph();
+            Object parent = graph.getDefaultParent();
+            Map<String, Object> vertices = new LinkedHashMap<>();
+
+            graph.getModel().beginUpdate();
+            try {
+                for (String node : sortedNodes) {
+                    vertices.computeIfAbsent(node,
+                            key -> graph.insertVertex(parent, null, shortLabel(key), 0, 0, 190, 55, NODE_STYLE));
+                }
+
+                for (DependencyRelation relation : relations) {
+                    String forward = edgeKey(relation.getSource(), relation.getTarget());
+                    String reverse = edgeKey(relation.getTarget(), relation.getSource());
+                    boolean bidirectional = edgeKeys.contains(forward) && edgeKeys.contains(reverse);
+                    
+                    if (bidirectional && forward.compareTo(reverse) > 0) {
+                        continue;
+                    }
+                    
+                    String style = bidirectional ? EDGE_STYLE_BIDIRECTIONAL : EDGE_STYLE_NORMAL;
+                    if (bidirectional) {
+                        style = "startArrow=classic;" + style;
+                    }
+
+                    graph.insertEdge(
+                            parent,
+                            null,
+                            "",
+                            vertices.get(relation.getSource()),
+                            vertices.get(relation.getTarget()),
+                            style
+                    );
+                }
+            } finally {
+                graph.getModel().endUpdate();
             }
 
-            for (DependencyRelation relation : relations) {
-                String forward = edgeKey(relation.getSource(), relation.getTarget());
-                String reverse = edgeKey(relation.getTarget(), relation.getSource());
-                boolean bidirectional = edgeKeys.contains(forward) && edgeKeys.contains(reverse);
-                String style = bidirectional ? EDGE_STYLE_BIDIRECTIONAL : EDGE_STYLE_NORMAL;
-                graph.insertEdge(
-                        parent,
-                        null,
-                        "",
-                        vertices.get(relation.getSource()),
-                        vertices.get(relation.getTarget()),
-                        style
-                );
-            }
-        } finally {
-            graph.getModel().endUpdate();
-        }
+            mxOrganicLayout layout = new mxOrganicLayout(graph);
+            layout.execute(parent);
 
-        mxOrganicLayout layout = new mxOrganicLayout(graph);
-        layout.execute(parent);
+            mxGraphComponent component = new mxGraphComponent(graph);
+            component.setConnectable(false);
+            component.setAutoExtend(true);
+            component.setPanning(true);
+            component.setToolTips(true);
+            component.setOpaque(true);
+            component.setBackground(java.awt.Color.WHITE);
+            component.getViewport().setOpaque(true);
+            component.getViewport().setBackground(java.awt.Color.WHITE);
 
-        mxGraphComponent component = new mxGraphComponent(graph);
-        component.setConnectable(false);
-        component.setAutoExtend(true);
-        component.setPanning(true);
-        component.setToolTips(true);
-        component.setOpaque(true);
-        component.setBackground(java.awt.Color.WHITE);
-        component.getViewport().setOpaque(true);
-        component.getViewport().setBackground(java.awt.Color.WHITE);
-
-        setSwingContent(component);
+            setSwingContent(component);
+        });
     }
 
     private void renderNoGraphMessage(String message) {
-        Platform.runLater(() -> {
+        SwingUtilities.invokeLater(() -> {
             javax.swing.JPanel panel = new javax.swing.JPanel(new java.awt.BorderLayout());
             panel.setBackground(java.awt.Color.WHITE);
             panel.add(new javax.swing.JLabel(message, javax.swing.SwingConstants.CENTER), java.awt.BorderLayout.CENTER);
-            graphNode.setContent(panel);
-            graphNode.requestFocus();
+            Platform.runLater(() -> {
+                graphNode.setContent(panel);
+                graphNode.requestFocus();
+            });
         });
     }
 
