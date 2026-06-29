@@ -5,6 +5,7 @@ import com.example.analyzer.model.ClassMetrics;
 import com.example.analyzer.model.DependencyRelation;
 import com.example.analyzer.service.JavaSourceProjectAnalyzer;
 import com.example.analyzer.service.MetricsAnalyzerService;
+import com.example.analyzer.ui.FileExplorerTab;
 import com.mxgraph.layout.mxOrganicLayout;
 import com.mxgraph.swing.mxGraphComponent;
 import com.mxgraph.view.mxGraph;
@@ -63,6 +64,7 @@ public class MetricsAnalyzerApp extends Application {
     private TableView<ClassMetrics> table;
     private SwingNode graphNode;
     private ComboBox<String> graphLevelCombo;
+    private FileExplorerTab fileExplorerTab;
 
     private Path selectedProjectPath;
     private AnalysisResult latestResult;
@@ -92,6 +94,7 @@ public class MetricsAnalyzerApp extends Application {
                 selectedFolderLabel.setText(selectedProjectPath.toString());
                 statusLabel.setText("Folder selected");
                 analyzeButton.setDisable(false);
+                fileExplorerTab.setProjectPath(selectedProjectPath);
             }
         });
 
@@ -107,9 +110,12 @@ public class MetricsAnalyzerApp extends Application {
         );
         top.setPadding(new Insets(12));
 
+        fileExplorerTab = new FileExplorerTab();
+        
         TabPane tabs = new TabPane();
         tabs.getTabs().add(createMetricsTab());
         tabs.getTabs().add(createCouplingGraphTab());
+        tabs.getTabs().add(fileExplorerTab.createTab(selectedProjectPath != null ? selectedProjectPath : new File(".").toPath()));
 
         BorderPane root = new BorderPane();
         root.setTop(top);
