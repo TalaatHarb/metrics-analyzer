@@ -5,6 +5,12 @@ import javafx.scene.control.Tab;
 import javafx.scene.control.TreeCell;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeView;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.Button;
+import javafx.scene.control.SplitPane;
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -12,12 +18,17 @@ import javafx.scene.layout.VBox;
 import javafx.geometry.Insets;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
+import com.example.analyzer.model.StaticIssue;
+import com.example.analyzer.service.StaticAnalyzerService;
+import javafx.collections.FXCollections;
+
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Arrays;
 
 public class FileExplorerTab {
@@ -45,8 +56,21 @@ public class FileExplorerTab {
         codeContainer.setPadding(new Insets(8));
         VBox.setVgrow(codeArea, Priority.ALWAYS);
         
-        HBox.setHgrow(codeContainer, Priority.ALWAYS);
-        HBox mainContent = new HBox(treeContainer, codeContainer);
+        TableView<StaticIssue> problemsTable = createProblemsTable();
+        Button scanButton = new Button("Scan for Problems");
+        scanButton.setOnAction(e -> runStaticAnalysis(problemsTable));
+        
+        VBox problemsContainer = new VBox(8, scanButton, problemsTable);
+        problemsContainer.setPadding(new Insets(8));
+        VBox.setVgrow(problemsTable, Priority.ALWAYS);
+        
+        SplitPane splitPane = new SplitPane();
+        splitPane.setOrientation(javafx.geometry.Orientation.VERTICAL);
+        splitPane.getItems().addAll(codeContainer, problemsContainer);
+        splitPane.setDividerPositions(0.7);
+        
+        HBox.setHgrow(splitPane, Priority.ALWAYS);
+        HBox mainContent = new HBox(treeContainer, splitPane);
         mainContent.setSpacing(0);
         
         content.setCenter(mainContent);
@@ -60,6 +84,44 @@ public class FileExplorerTab {
         Tab tab = new Tab("File Explorer", content);
         tab.setClosable(false);
         return tab;
+    }
+    
+    private TableView<StaticIssue> createProblemsTable() {
+        TableView<StaticIssue> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
+        TableColumn<StaticIssue, String> fileCol = new TableColumn<>("File");
+        fileCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getFile().getFileName().toString()));
+        
+        TableColumn<StaticIssue, Number> lineCol = new TableColumn<>("Line");
+        lineCol.setCellValueFactory(v -> new ReadOnlyObjectWrapper<>(v.getValue().getLineNumber()));
+        lineCol.setPrefWidth(50);
+        lineCol.setMaxWidth(50);
+        
+        TableColumn<StaticIssue, String> descCol = new TableColumn<>("Description");
+        descCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getDescription()));
+        
+        TableColumn<StaticIssue, String> sevCol = new TableColumn<>("Severity");
+        sevCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getSeverity()));
+        
+        table.getColumns().addAll(fileCol, lineCol, descCol, sevCol);
+        
+        table.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
+            if (newVal != null) {
+                loadFileContent(newVal.getFile());
+                codeArea.moveTo(Math.max(0, newVal.getLineNumber() - 1), 0);
+                codeArea.requestFollowCaret();
+            }
+        });
+        
+        return table;
+    }
+    
+    private void runStaticAnalysis(TableView<StaticIssue> problemsTable) {
+        if (rootPath == null) return;
+        StaticAnalyzerService analyzer = new StaticAnalyzerService();
+        List<StaticIssue> issues = analyzer.analyzeProject(rootPath);
+        problemsTable.setItems(FXCollections.observableArrayList(issues));
     }
 
     private TreeView<File> createFileTree() {
