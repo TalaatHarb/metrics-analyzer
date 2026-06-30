@@ -20,3 +20,39 @@ This application is a Java Source Project Analyzer built using [Spoon](https://s
   * *Halstead Volume (V)* = `(total operators + total operands) * log2(distinct operators + distinct operands)`
   * *Raw MI* = `171.0 - 5.2 * ln(max(V, 1.0)) - 0.23 * CC - 16.2 * ln(max(LOC, 1))`
   * *Normalized MI* = `max(0, min(100, (Raw MI * 100.0) / 171.0))`
+
+## How to Build
+
+Ensure you have Java 11 or higher and Maven installed. Run the following command in the project root:
+
+```bash
+mvn clean package
+```
+
+## How to Run
+
+To start the graphical user interface (JavaFX), run:
+
+```bash
+mvn javafx:run
+```
+
+Alternatively, to run the CLI analyzer directly:
+
+```bash
+mvn exec:java -Dexec.mainClass="com.example.analyzer.service.JavaSourceProjectAnalyzer" -Dexec.args="<path-to-project>"
+```
+
+## Screenshots
+
+### Project Explorer & Static Analysis
+![Project Explorer & Static Analysis](images/ProjectExplorer-StaticAnalysis.PNG)
+
+### Metrics
+![Metrics](images/Metrics.PNG)
+
+### Coupling
+![Coupling](images/Coupling.PNG)
+
+### Git Commits
+![Git Commits](images/GitCommits.PNG)
