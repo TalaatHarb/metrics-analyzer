@@ -61,6 +61,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
         launcher.addInputResource(sourcePath.toString());
         launcher.getEnvironment().setNoClasspath(true);
         launcher.getEnvironment().setCommentEnabled(false);
+        launcher.getEnvironment().setIgnoreSyntaxErrors(true);
 
         CtModel model = launcher.buildModel();
         List<ClassMetrics> rows = new ArrayList<>();
