@@ -156,6 +156,14 @@ public class MetricsAnalyzerApp extends Application {
 
         Label legend = new Label("Gray edges: one-way coupling | Red edges: two-way coupling");
         graphNode = new SwingNode();
+        graphNode.boundsInLocalProperty().addListener((obs, oldBounds, newBounds) -> {
+            SwingUtilities.invokeLater(() -> {
+                if (graphNode.getContent() != null) {
+                    graphNode.getContent().revalidate();
+                    graphNode.getContent().repaint();
+                }
+            });
+        });
 
         VBox controls = new VBox(
                 8,
@@ -365,6 +373,13 @@ public class MetricsAnalyzerApp extends Application {
             component.setBackground(java.awt.Color.WHITE);
             component.getViewport().setOpaque(true);
             component.getViewport().setBackground(java.awt.Color.WHITE);
+            component.addComponentListener(new java.awt.event.ComponentAdapter() {
+                @Override
+                public void componentResized(java.awt.event.ComponentEvent e) {
+                    component.revalidate();
+                    component.repaint();
+                }
+            });
 
             setSwingContent(component);
         });
