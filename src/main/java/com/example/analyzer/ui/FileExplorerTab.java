@@ -73,16 +73,51 @@ public class FileExplorerTab {
         TableView<StaticIssue> problemsTable = createProblemsTable();
         
         ComboBox<StaticAnalyzer> analyzerComboBox = new ComboBox<>();
-        analyzerComboBox.getItems().addAll(new BasicStaticAnalyzer(), new PMDStaticAnalyzer(), new CheckstyleStaticAnalyzer(), new SpotBugsStaticAnalyzer());
+        List<StaticAnalyzer> allAnalyzers = Arrays.asList(new BasicStaticAnalyzer(), new PMDStaticAnalyzer(), new CheckstyleStaticAnalyzer(), new SpotBugsStaticAnalyzer());
+        analyzerComboBox.getItems().addAll(allAnalyzers);
         analyzerComboBox.getSelectionModel().selectFirst();
+        
+        javafx.scene.control.CheckBox scanCurrentFileBox = new javafx.scene.control.CheckBox("Scan Current File Only");
+        scanCurrentFileBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            StaticAnalyzer selected = analyzerComboBox.getValue();
+            analyzerComboBox.getItems().clear();
+            if (newVal) {
+                for (StaticAnalyzer analyzer : allAnalyzers) {
+                    if (analyzer.canAnalyzeSingleFile()) {
+                        analyzerComboBox.getItems().add(analyzer);
+                    }
+                }
+            } else {
+                analyzerComboBox.getItems().addAll(allAnalyzers);
+            }
+            if (analyzerComboBox.getItems().contains(selected)) {
+                analyzerComboBox.getSelectionModel().select(selected);
+            } else {
+                analyzerComboBox.getSelectionModel().selectFirst();
+            }
+        });
         
         Button scanButton = new Button("Scan for Problems");
         scanButton.setOnAction(e -> {
             scanButton.setDisable(true);
-            runStaticAnalysis(problemsTable, analyzerComboBox.getValue(), () -> scanButton.setDisable(false));
+            if (scanCurrentFileBox.isSelected()) {
+                TreeItem<File> selectedItem = fileTree.getSelectionModel().getSelectedItem();
+                if (selectedItem != null && selectedItem.getValue() != null && selectedItem.getValue().isFile()) {
+                    runSingleFileAnalysis(problemsTable, analyzerComboBox.getValue(), selectedItem.getValue().toPath(), () -> scanButton.setDisable(false));
+                } else {
+                    Alert alert = new Alert(Alert.AlertType.WARNING);
+                    alert.setTitle("No File Selected");
+                    alert.setHeaderText(null);
+                    alert.setContentText("Please select a file to scan.");
+                    alert.showAndWait();
+                    scanButton.setDisable(false);
+                }
+            } else {
+                runStaticAnalysis(problemsTable, analyzerComboBox.getValue(), () -> scanButton.setDisable(false));
+            }
         });
         
-        HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, scanButton);
+        HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, scanCurrentFileBox, scanButton);
         controls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         
         VBox problemsContainer = new VBox(8, controls, problemsTable);
@@ -206,6 +241,35 @@ public class FileExplorerTab {
             @Override
             protected List<StaticIssue> call() {
                 return analyzer.analyzeProject(rootPath);
+            }
+        };
+        
+        task.setOnSucceeded(e -> {
+            problemsTable.setItems(FXCollections.observableArrayList(task.getValue()));
+            onComplete.run();
+        });
+        
+        task.setOnFailed(e -> {
+            onComplete.run();
+            Throwable ex = task.getException();
+            if (ex != null) ex.printStackTrace();
+        });
+        
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void runSingleFileAnalysis(TableView<StaticIssue> problemsTable, StaticAnalyzer analyzer, Path filePath, Runnable onComplete) {
+        if (filePath == null) {
+            onComplete.run();
+            return;
+        }
+        
+        Task<List<StaticIssue>> task = new Task<>() {
+            @Override
+            protected List<StaticIssue> call() {
+                return analyzer.analyzeFile(filePath);
             }
         };
         

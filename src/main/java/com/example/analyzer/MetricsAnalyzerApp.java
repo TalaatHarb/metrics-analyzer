@@ -6,6 +6,7 @@ import com.example.analyzer.model.DependencyRelation;
 import com.example.analyzer.service.JavaSourceProjectAnalyzer;
 import com.example.analyzer.service.MetricsAnalyzerService;
 import com.example.analyzer.ui.FileExplorerTab;
+import com.example.analyzer.ui.GitCommitsTab;
 import com.mxgraph.layout.hierarchical.mxHierarchicalLayout;
 import com.mxgraph.swing.mxGraphComponent;
 import com.mxgraph.view.mxGraph;
@@ -70,6 +71,7 @@ public class MetricsAnalyzerApp extends Application {
     private SwingNode graphNode;
     private ComboBox<String> graphLevelCombo;
     private FileExplorerTab fileExplorerTab;
+    private GitCommitsTab gitCommitsTab;
 
     private Path selectedProjectPath;
     private AnalysisResult latestResult;
@@ -100,6 +102,7 @@ public class MetricsAnalyzerApp extends Application {
                 statusLabel.setText("Folder selected");
                 analyzeButton.setDisable(false);
                 fileExplorerTab.setProjectPath(selectedProjectPath);
+                gitCommitsTab.setProjectPath(selectedProjectPath);
             }
         });
 
@@ -116,11 +119,13 @@ public class MetricsAnalyzerApp extends Application {
         top.setPadding(new Insets(12));
 
         fileExplorerTab = new FileExplorerTab();
+        gitCommitsTab = new GitCommitsTab();
         
         TabPane tabs = new TabPane();
         tabs.getTabs().add(createMetricsTab());
         tabs.getTabs().add(createCouplingGraphTab());
         tabs.getTabs().add(fileExplorerTab.createTab(selectedProjectPath != null ? selectedProjectPath : new File(".").toPath()));
+        tabs.getTabs().add(gitCommitsTab.createTab(selectedProjectPath != null ? selectedProjectPath : new File(".").toPath()));
 
         BorderPane root = new BorderPane();
         root.setTop(top);

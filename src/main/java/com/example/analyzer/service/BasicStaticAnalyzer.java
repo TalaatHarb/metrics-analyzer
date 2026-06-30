@@ -23,14 +23,28 @@ public class BasicStaticAnalyzer implements StaticAnalyzer {
         try (Stream<Path> paths = Files.walk(rootPath)) {
             paths.filter(Files::isRegularFile)
                  .filter(p -> p.toString().endsWith(".java"))
-                 .forEach(p -> analyzeFile(p, issues));
+                 .forEach(p -> analyzeFileInternal(p, issues));
         } catch (IOException e) {
             e.printStackTrace();
         }
         return issues;
     }
+
+    @Override
+    public boolean canAnalyzeSingleFile() {
+        return true;
+    }
+
+    @Override
+    public List<StaticIssue> analyzeFile(Path filePath) {
+        List<StaticIssue> issues = new ArrayList<>();
+        if (filePath != null && Files.isRegularFile(filePath) && filePath.toString().endsWith(".java")) {
+            analyzeFileInternal(filePath, issues);
+        }
+        return issues;
+    }
     
-    private void analyzeFile(Path file, List<StaticIssue> issues) {
+    private void analyzeFileInternal(Path file, List<StaticIssue> issues) {
         try {
             List<String> lines = Files.readAllLines(file);
             for (int i = 0; i < lines.size(); i++) {
