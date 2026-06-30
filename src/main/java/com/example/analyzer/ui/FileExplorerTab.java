@@ -19,9 +19,14 @@ import javafx.geometry.Insets;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 import com.example.analyzer.model.StaticIssue;
-import com.example.analyzer.service.StaticAnalyzerService;
+import com.example.analyzer.service.StaticAnalyzer;
+import com.example.analyzer.service.BasicStaticAnalyzer;
+import com.example.analyzer.service.PMDStaticAnalyzer;
 import javafx.collections.FXCollections;
-
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Label;
+import javafx.concurrent.Task;
+import javafx.application.Platform;
 
 import java.io.File;
 import java.io.IOException;
@@ -57,10 +62,21 @@ public class FileExplorerTab {
         VBox.setVgrow(codeArea, Priority.ALWAYS);
         
         TableView<StaticIssue> problemsTable = createProblemsTable();
-        Button scanButton = new Button("Scan for Problems");
-        scanButton.setOnAction(e -> runStaticAnalysis(problemsTable));
         
-        VBox problemsContainer = new VBox(8, scanButton, problemsTable);
+        ComboBox<StaticAnalyzer> analyzerComboBox = new ComboBox<>();
+        analyzerComboBox.getItems().addAll(new BasicStaticAnalyzer(), new PMDStaticAnalyzer());
+        analyzerComboBox.getSelectionModel().selectFirst();
+        
+        Button scanButton = new Button("Scan for Problems");
+        scanButton.setOnAction(e -> {
+            scanButton.setDisable(true);
+            runStaticAnalysis(problemsTable, analyzerComboBox.getValue(), () -> scanButton.setDisable(false));
+        });
+        
+        HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, scanButton);
+        controls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        
+        VBox problemsContainer = new VBox(8, controls, problemsTable);
         problemsContainer.setPadding(new Insets(8));
         VBox.setVgrow(problemsTable, Priority.ALWAYS);
         
@@ -108,20 +124,44 @@ public class FileExplorerTab {
         
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
             if (newVal != null) {
-                loadFileContent(newVal.getFile());
-                codeArea.moveTo(Math.max(0, newVal.getLineNumber() - 1), 0);
-                codeArea.requestFollowCaret();
+                if (java.nio.file.Files.isRegularFile(newVal.getFile())) {
+                    loadFileContent(newVal.getFile());
+                    codeArea.moveTo(Math.max(0, newVal.getLineNumber() - 1), 0);
+                    codeArea.requestFollowCaret();
+                }
             }
         });
         
         return table;
     }
     
-    private void runStaticAnalysis(TableView<StaticIssue> problemsTable) {
-        if (rootPath == null) return;
-        StaticAnalyzerService analyzer = new StaticAnalyzerService();
-        List<StaticIssue> issues = analyzer.analyzeProject(rootPath);
-        problemsTable.setItems(FXCollections.observableArrayList(issues));
+    private void runStaticAnalysis(TableView<StaticIssue> problemsTable, StaticAnalyzer analyzer, Runnable onComplete) {
+        if (rootPath == null) {
+            onComplete.run();
+            return;
+        }
+        
+        Task<List<StaticIssue>> task = new Task<>() {
+            @Override
+            protected List<StaticIssue> call() {
+                return analyzer.analyzeProject(rootPath);
+            }
+        };
+        
+        task.setOnSucceeded(e -> {
+            problemsTable.setItems(FXCollections.observableArrayList(task.getValue()));
+            onComplete.run();
+        });
+        
+        task.setOnFailed(e -> {
+            onComplete.run();
+            Throwable ex = task.getException();
+            if (ex != null) ex.printStackTrace();
+        });
+        
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
     }
 
     private TreeView<File> createFileTree() {

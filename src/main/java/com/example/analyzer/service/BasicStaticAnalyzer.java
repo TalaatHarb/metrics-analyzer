@@ -8,8 +8,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
-public class StaticAnalyzerService {
+public class BasicStaticAnalyzer implements StaticAnalyzer {
     
+    @Override
+    public String getName() {
+        return "Basic Analyzer";
+    }
+
+    @Override
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null || !Files.exists(rootPath)) return issues;
@@ -52,5 +58,10 @@ public class StaticAnalyzerService {
         } catch (IOException e) {
             // Skip unreadable files
         }
+    }
+
+    @Override
+    public String toString() {
+        return getName();
     }
 }
