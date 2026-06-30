@@ -22,6 +22,8 @@ import com.example.analyzer.model.StaticIssue;
 import com.example.analyzer.service.StaticAnalyzer;
 import com.example.analyzer.service.BasicStaticAnalyzer;
 import com.example.analyzer.service.PMDStaticAnalyzer;
+import com.example.analyzer.service.CheckstyleStaticAnalyzer;
+import com.example.analyzer.service.SpotBugsStaticAnalyzer;
 import javafx.collections.FXCollections;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -71,7 +73,7 @@ public class FileExplorerTab {
         TableView<StaticIssue> problemsTable = createProblemsTable();
         
         ComboBox<StaticAnalyzer> analyzerComboBox = new ComboBox<>();
-        analyzerComboBox.getItems().addAll(new BasicStaticAnalyzer(), new PMDStaticAnalyzer());
+        analyzerComboBox.getItems().addAll(new BasicStaticAnalyzer(), new PMDStaticAnalyzer(), new CheckstyleStaticAnalyzer(), new SpotBugsStaticAnalyzer());
         analyzerComboBox.getSelectionModel().selectFirst();
         
         Button scanButton = new Button("Scan for Problems");
