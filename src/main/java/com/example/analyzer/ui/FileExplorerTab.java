@@ -28,6 +28,13 @@ import javafx.scene.control.Label;
 import javafx.concurrent.Task;
 import javafx.application.Platform;
 
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.Alert;
+import javafx.scene.control.TextArea;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -116,6 +123,58 @@ public class FileExplorerTab {
         
         TableColumn<StaticIssue, String> descCol = new TableColumn<>("Description");
         descCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getDescription()));
+        descCol.setCellFactory(tc -> {
+            TableCell<StaticIssue, String> cell = new TableCell<>() {
+                @Override
+                protected void updateItem(String item, boolean empty) {
+                    super.updateItem(item, empty);
+                    if (empty || item == null) {
+                        setText(null);
+                        setGraphic(null);
+                    } else {
+                        setText(item);
+                    }
+                }
+            };
+            
+            cell.setWrapText(true);
+            
+            ContextMenu contextMenu = new ContextMenu();
+            MenuItem copyItem = new MenuItem("Copy Description");
+            copyItem.setOnAction(e -> {
+                if (cell.getItem() != null) {
+                    Clipboard clipboard = Clipboard.getSystemClipboard();
+                    ClipboardContent content = new ClipboardContent();
+                    content.putString(cell.getItem());
+                    clipboard.setContent(content);
+                }
+            });
+            
+            MenuItem detailsItem = new MenuItem("Show Details");
+            detailsItem.setOnAction(e -> {
+                if (cell.getItem() != null) {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Issue Description");
+                    alert.setHeaderText(null);
+                    TextArea textArea = new TextArea(cell.getItem());
+                    textArea.setEditable(false);
+                    textArea.setWrapText(true);
+                    alert.getDialogPane().setContent(textArea);
+                    alert.showAndWait();
+                }
+            });
+            
+            contextMenu.getItems().addAll(copyItem, detailsItem);
+            cell.emptyProperty().addListener((obs, wasEmpty, isNowEmpty) -> {
+                if (isNowEmpty) {
+                    cell.setContextMenu(null);
+                } else {
+                    cell.setContextMenu(contextMenu);
+                }
+            });
+            
+            return cell;
+        });
         
         TableColumn<StaticIssue, String> sevCol = new TableColumn<>("Severity");
         sevCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getSeverity()));
