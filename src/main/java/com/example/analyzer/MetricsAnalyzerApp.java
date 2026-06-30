@@ -6,7 +6,7 @@ import com.example.analyzer.model.DependencyRelation;
 import com.example.analyzer.service.JavaSourceProjectAnalyzer;
 import com.example.analyzer.service.MetricsAnalyzerService;
 import com.example.analyzer.ui.FileExplorerTab;
-import com.mxgraph.layout.mxOrganicLayout;
+import com.mxgraph.layout.hierarchical.mxHierarchicalLayout;
 import com.mxgraph.swing.mxGraphComponent;
 import com.mxgraph.view.mxGraph;
 import javafx.application.Application;
@@ -50,11 +50,15 @@ public class MetricsAnalyzerApp extends Application {
     private static final String GRAPH_CLASS_LEVEL = "Class/File Coupling";
     private static final String GRAPH_PACKAGE_LEVEL = "Package Coupling";
     private static final String EDGE_STYLE_NORMAL =
-            "endArrow=classic;strokeColor=#6b7280;strokeWidth=1.2;rounded=1;";
+            "endArrow=classic;strokeWidth=1.5;curved=1;";
     private static final String EDGE_STYLE_BIDIRECTIONAL =
-            "endArrow=classic;strokeColor=#dc2626;strokeWidth=2.2;rounded=1;";
+            "endArrow=classic;strokeColor=#dc2626;strokeWidth=2.2;curved=1;";
     private static final String NODE_STYLE =
-            "shape=ellipse;perimeter=ellipsePerimeter;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=11;";
+            "shape=rectangle;rounded=1;arcSize=10;fillColor=#eef2ff;strokeColor=#4f46e5;fontSize=11;";
+
+    private static final String[] EDGE_COLORS = {
+            "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#6366f1", "#ec4899", "#14b8a6", "#f43f5e"
+    };
 
     private final MetricsAnalyzerService analyzer = new JavaSourceProjectAnalyzer();
     private final ObservableList<ClassMetrics> rows = FXCollections.observableArrayList();
@@ -328,6 +332,11 @@ public class MetricsAnalyzerApp extends Application {
                         style = "startArrow=classic;" + style;
                     }
 
+                    if (!bidirectional) {
+                        int colorIndex = Math.abs(relation.getSource().hashCode()) % EDGE_COLORS.length;
+                        style = style + "strokeColor=" + EDGE_COLORS[colorIndex] + ";";
+                    }
+
                     graph.insertEdge(
                             parent,
                             null,
@@ -341,7 +350,10 @@ public class MetricsAnalyzerApp extends Application {
                 graph.getModel().endUpdate();
             }
 
-            mxOrganicLayout layout = new mxOrganicLayout(graph);
+            mxHierarchicalLayout layout = new mxHierarchicalLayout(graph);
+            layout.setOrientation(javax.swing.SwingConstants.WEST);
+            layout.setIntraCellSpacing(50.0);
+            layout.setInterRankCellSpacing(100.0);
             layout.execute(parent);
 
             mxGraphComponent component = new mxGraphComponent(graph);
