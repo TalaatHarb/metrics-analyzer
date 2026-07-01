@@ -43,6 +43,14 @@ Alternatively, to run the CLI analyzer directly:
 mvn exec:java -Dexec.mainClass="net.talaatharb.analyzer.service.JavaSourceProjectAnalyzer" -Dexec.args="<path-to-project>"
 ```
 
+## Coverage Visualization (File Explorer)
+
+In the **File Explorer** tab, use **Generate Coverage** to run tests and generate coverage reports, then visualize line coverage directly in the editor gutter and line background.
+
+Supported report sources:
+- **JaCoCo** (`target/site/jacoco/jacoco.xml` or `target/site/jacoco-aggregate/jacoco.xml`)
+- **Cobertura** (`target/site/cobertura/coverage.xml` or `target/coverage.xml`)
+
 ## Screenshots
 
 ### Project Explorer & Static Analysis

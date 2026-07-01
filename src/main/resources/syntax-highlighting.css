@@ -51,3 +51,15 @@
     -fx-fill: #444444;
     -fx-font-weight: bold;
 }
+
+.coverage-line-covered {
+    -fx-background-color: rgba(22, 163, 74, 0.12);
+}
+
+.coverage-line-partial {
+    -fx-background-color: rgba(217, 119, 6, 0.14);
+}
+
+.coverage-line-missed {
+    -fx-background-color: rgba(220, 38, 38, 0.14);
+}
