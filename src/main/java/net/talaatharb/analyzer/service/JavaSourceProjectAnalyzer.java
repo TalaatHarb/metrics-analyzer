@@ -25,8 +25,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(JavaSourceProjectAnalyzer.class);
     @Override
     public String getDisplayName() {
         return "Java Source Project Analyzer";
@@ -399,23 +402,23 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
         JavaSourceProjectAnalyzer analyzer = new JavaSourceProjectAnalyzer();
         AnalysisResult result = analyzer.analyzeProject(root);
 
-        System.out.println("========================================");
-        System.out.println("   CODE METRICS ANALYSIS REPORT");
-        System.out.println("========================================");
-        System.out.println(result.buildSummary());
+        LOGGER.info("========================================");
+        LOGGER.info("   CODE METRICS ANALYSIS REPORT");
+        LOGGER.info("========================================");
+        LOGGER.info("{}", result.buildSummary());
 
         for (ClassMetrics row : result.getClassMetrics()) {
-            System.out.println(row.getPackageName() + "." + row.getClassName());
-            System.out.println("  LOC: " + row.getLinesOfCode()
+            LOGGER.info("{}.{}", row.getPackageName(), row.getClassName());
+            LOGGER.info("  LOC: " + row.getLinesOfCode()
                     + ", Methods: " + row.getMethodCount()
                     + ", Fields: " + row.getFieldCount());
-            System.out.println("  Coupling: " + row.getEfferentCoupling()
+            LOGGER.info("  Coupling: " + row.getEfferentCoupling()
                     + ", LCOM: " + String.format(java.util.Locale.US, "%.2f", row.getLcom())
                     + ", CC: " + row.getCyclomaticComplexity());
-            System.out.println("  WMC: " + row.getWeightedMethodsPerClass()
+            LOGGER.info("  WMC: " + row.getWeightedMethodsPerClass()
                     + ", RFC: " + row.getResponseForClass()
                     + ", MI: " + String.format(java.util.Locale.US, "%.2f", row.getMaintainabilityIndex()));
-            System.out.println();
+            LOGGER.info("");
         }
     }
 }

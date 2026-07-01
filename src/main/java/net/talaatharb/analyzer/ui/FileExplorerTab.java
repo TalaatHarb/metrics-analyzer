@@ -8,6 +8,7 @@ import javafx.scene.control.TreeView;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.Button;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.SplitPane;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
@@ -37,6 +38,8 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.TextArea;
 import javafx.scene.input.Clipboard;
 import javafx.scene.input.ClipboardContent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,15 +47,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Arrays;
+import java.util.stream.StreamSupport;
 
 public class FileExplorerTab {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FileExplorerTab.class);
     private final CodeArea codeArea;
     private final TreeView<File> fileTree;
+    private final Label currentFileLabel;
+    private final Label breadcrumbsLabel;
     private Path rootPath;
 
     public FileExplorerTab() {
         this.fileTree = createFileTree();
         this.codeArea = createCodeArea();
+        this.currentFileLabel = new Label("File: No file selected");
+        this.breadcrumbsLabel = new Label("Path: -");
     }
 
     public Tab createTab(Path projectPath) {
@@ -66,7 +75,10 @@ public class FileExplorerTab {
         treeContainer.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;");
         treeContainer.setPrefWidth(250);
         
-        VBox codeContainer = new VBox(codeArea);
+        currentFileLabel.setStyle("-fx-font-weight: bold;");
+        breadcrumbsLabel.setStyle("-fx-text-fill: #6b7280;");
+        VBox codeHeader = new VBox(2, currentFileLabel, breadcrumbsLabel);
+        VBox codeContainer = new VBox(8, codeHeader, codeArea);
         codeContainer.setPadding(new Insets(8));
         VBox.setVgrow(codeArea, Priority.ALWAYS);
         
@@ -98,12 +110,22 @@ public class FileExplorerTab {
         });
         
         Button scanButton = new Button("Scan for Problems");
+        ProgressIndicator analysisProgress = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
+        analysisProgress.setPrefSize(16, 16);
+        analysisProgress.setVisible(false);
+        analysisProgress.setManaged(false);
         scanButton.setOnAction(e -> {
             scanButton.setDisable(true);
+            analysisProgress.setVisible(true);
+            analysisProgress.setManaged(true);
             if (scanCurrentFileBox.isSelected()) {
                 TreeItem<File> selectedItem = fileTree.getSelectionModel().getSelectedItem();
                 if (selectedItem != null && selectedItem.getValue() != null && selectedItem.getValue().isFile()) {
-                    runSingleFileAnalysis(problemsTable, analyzerComboBox.getValue(), selectedItem.getValue().toPath(), () -> scanButton.setDisable(false));
+                    runSingleFileAnalysis(problemsTable, analyzerComboBox.getValue(), selectedItem.getValue().toPath(), () -> {
+                        scanButton.setDisable(false);
+                        analysisProgress.setVisible(false);
+                        analysisProgress.setManaged(false);
+                    });
                 } else {
                     Alert alert = new Alert(Alert.AlertType.WARNING);
                     alert.setTitle("No File Selected");
@@ -111,13 +133,19 @@ public class FileExplorerTab {
                     alert.setContentText("Please select a file to scan.");
                     alert.showAndWait();
                     scanButton.setDisable(false);
+                    analysisProgress.setVisible(false);
+                    analysisProgress.setManaged(false);
                 }
             } else {
-                runStaticAnalysis(problemsTable, analyzerComboBox.getValue(), () -> scanButton.setDisable(false));
+                runStaticAnalysis(problemsTable, analyzerComboBox.getValue(), () -> {
+                    scanButton.setDisable(false);
+                    analysisProgress.setVisible(false);
+                    analysisProgress.setManaged(false);
+                });
             }
         });
         
-        HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, scanCurrentFileBox, scanButton);
+        HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, scanCurrentFileBox, scanButton, analysisProgress);
         controls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
         
         VBox problemsContainer = new VBox(8, controls, problemsTable);
@@ -252,7 +280,9 @@ public class FileExplorerTab {
         task.setOnFailed(e -> {
             onComplete.run();
             Throwable ex = task.getException();
-            if (ex != null) ex.printStackTrace();
+            if (ex != null) {
+                LOGGER.error("Project static analysis failed", ex);
+            }
         });
         
         Thread thread = new Thread(task);
@@ -281,7 +311,9 @@ public class FileExplorerTab {
         task.setOnFailed(e -> {
             onComplete.run();
             Throwable ex = task.getException();
-            if (ex != null) ex.printStackTrace();
+            if (ex != null) {
+                LOGGER.error("Single-file static analysis failed for {}", filePath, ex);
+            }
         });
         
         Thread thread = new Thread(task);
@@ -318,8 +350,6 @@ public class FileExplorerTab {
         area.setWrapText(false);
         return area;
     }
-
-    private String currentFileName;
 
     private void refreshFileTree(Path projectPath) {
         File root = projectPath.toFile();
@@ -379,6 +409,7 @@ public class FileExplorerTab {
     }
 
     private void loadFileContent(Path filePath) {
+        updateFileContext(filePath);
         try {
             String filename = filePath.getFileName().toString();
             String rawContent = Files.readString(filePath, StandardCharsets.UTF_8);
@@ -409,17 +440,46 @@ public class FileExplorerTab {
                 if (spans != null && spans.length() == content.length()) {
                     codeArea.setStyleSpans(0, spans);
                 } else if (spans != null) {
-                    System.err.println("Span length mismatch for " + filename + ": expected " + content.length() + " but got " + spans.length());
+                    LOGGER.warn("Span length mismatch for {}: expected {} but got {}", filename, content.length(), spans.length());
                 }
             } catch (Exception e) {
-                System.err.println("Syntax highlighting error for " + filename + ": " + e.getMessage());
+                LOGGER.error("Syntax highlighting error for {}", filename, e);
             }
             
             codeArea.moveTo(0);
         } catch (IOException e) {
+            LOGGER.error("Failed to read file {}", filePath, e);
             codeArea.clear();
             codeArea.appendText("Error reading file: " + e.getMessage());
         }
+    }
+
+    private void updateFileContext(Path filePath) {
+        String filename = filePath.getFileName() != null ? filePath.getFileName().toString() : filePath.toString();
+        currentFileLabel.setText("File: " + filename);
+        breadcrumbsLabel.setText("Path: " + buildBreadcrumb(filePath));
+    }
+
+    private String buildBreadcrumb(Path filePath) {
+        if (rootPath == null) {
+            return filePath.toString();
+        }
+
+        try {
+            Path relative = rootPath.relativize(filePath);
+            String path = StreamSupport.stream(relative.spliterator(), false)
+                    .map(Path::toString)
+                    .reduce((left, right) -> left + " > " + right)
+                    .orElse(filenameFromPath(filePath));
+            return filenameFromPath(rootPath) + " > " + path;
+        } catch (IllegalArgumentException ex) {
+            return filePath.toString();
+        }
+    }
+
+    private String filenameFromPath(Path path) {
+        Path name = path.getFileName();
+        return name != null ? name.toString() : path.toString();
     }
 
     private static boolean isTextFile(File file) {
@@ -436,6 +496,8 @@ public class FileExplorerTab {
         this.rootPath = projectPath;
         refreshFileTree(projectPath);
         codeArea.clear();
+        currentFileLabel.setText("File: No file selected");
+        breadcrumbsLabel.setText("Path: -");
     }
 
     private static class FileTreeCell extends TreeCell<File> {
@@ -447,7 +509,9 @@ public class FileExplorerTab {
                 setText(null);
                 setGraphic(null);
             } else {
+                String icon = file.isDirectory() ? "\uD83D\uDCC1" : "\uD83D\uDCC4";
                 setText(file.getName());
+                setGraphic(new Label(icon));
             }
         }
     }

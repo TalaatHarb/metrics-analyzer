@@ -3,11 +3,14 @@ package net.talaatharb.sample;
 import java.util.ArrayList;
 import java.util.List;
 import java.io.FileWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Example: Poorly-designed God Class (LOW cohesion, HIGH coupling)
  */
 public class OrderManager {
+    private static final Logger LOGGER = LoggerFactory.getLogger(OrderManager.class);
     private List<String> orders;
     private String currentUser;
     private double totalAmount;
@@ -53,16 +56,16 @@ public class OrderManager {
     // Manages logging
     private void logOrder(String order) {
         // Unrelated responsibility
-        System.out.println("[LOG] Order: " + order);
+        LOGGER.info("[LOG] Order: {}", order);
     }
 
     private void logUser(String user) {
-        System.out.println("[LOG] User: " + user);
+        LOGGER.info("[LOG] User: {}", user);
     }
 
     // Manages database (coupling)
     private void saveToDatabase(String sql) {
-        System.out.println("Executing: " + sql);
+        LOGGER.info("Executing: {}", sql);
     }
 
     // Manages file I/O (coupling)

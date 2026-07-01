@@ -7,8 +7,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class BasicStaticAnalyzer implements StaticAnalyzer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BasicStaticAnalyzer.class);
     
     @Override
     public String getName() {
@@ -25,7 +28,7 @@ public class BasicStaticAnalyzer implements StaticAnalyzer {
                  .filter(p -> p.toString().endsWith(".java"))
                  .forEach(p -> analyzeFileInternal(p, issues));
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("Failed to scan project files at {}", rootPath, e);
         }
         return issues;
     }
@@ -70,7 +73,7 @@ public class BasicStaticAnalyzer implements StaticAnalyzer {
                 }
             }
         } catch (IOException e) {
-            // Skip unreadable files
+            LOGGER.warn("Skipping unreadable file {}", file, e);
         }
     }
 

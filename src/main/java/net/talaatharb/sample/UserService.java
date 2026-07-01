@@ -1,9 +1,13 @@
 package net.talaatharb.sample;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * Example: Well-designed UserService (HIGH cohesion, LOW coupling)
  */
 public class UserService {
+    private static final Logger LOGGER = LoggerFactory.getLogger(UserService.class);
     private String username;
     private String email;
     private boolean isActive;
@@ -43,7 +47,7 @@ public class UserService {
     }
 
     public void printUserInfo() {
-        System.out.println("User: " + username + ", Email: " + email + ", Active: " + isActive);
+        LOGGER.info("User: {}, Email: {}, Active: {}", username, email, isActive);
     }
 
     public boolean validateEmail() {
