@@ -1,0 +1,62 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*' # e.g. v1.0.0
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Build with Maven (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED" mvn clean compile package -DskipTests
+
+      - name: Build with Maven (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $env:MAVEN_OPTS="--add-opens java.base/java.lang=ALL-UNNAMED"
+          mvn clean compile package -DskipTests
+        shell: pwsh
+
+      - name: Rename JAR with tag version
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}              # v1.0.0
+          VERSION=${TAG_NAME#v}                          # 1.0.0
+          cd target
+          ORIGINAL_JAR=$(ls metrics-analyzer-*-jar-with-dependencies.jar)
+          RENAMED_JAR="metrics-analyzer-${VERSION}-${{ runner.os }}.jar"
+          cp "$ORIGINAL_JAR" "$RENAMED_JAR"
+          echo "RENAMED_JAR_PATH=target/$RENAMED_JAR" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Upload JAR to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            This release was automatically generated from tag `${{ github.ref_name }}`.
+            - Built on `${{ runner.os }}`
+            - Includes the JAR file with dependencies.
+          files: ${{ env.RENAMED_JAR_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
