@@ -40,7 +40,7 @@ mvn javafx:run
 Alternatively, to run the CLI analyzer directly:
 
 ```bash
-mvn exec:java -Dexec.mainClass="com.example.analyzer.service.JavaSourceProjectAnalyzer" -Dexec.args="<path-to-project>"
+mvn exec:java -Dexec.mainClass="net.talaatharb.analyzer.service.JavaSourceProjectAnalyzer" -Dexec.args="<path-to-project>"
 ```
 
 ## Screenshots
