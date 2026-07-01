@@ -33,3 +33,21 @@
     -fx-fill: #0033cc;
     -fx-font-weight: bold;
 }
+
+.git-diff-added {
+    -fx-fill: #008000;
+}
+
+.git-diff-removed {
+    -fx-fill: #cc0000;
+}
+
+.git-diff-hunk {
+    -fx-fill: #0066cc;
+    -fx-font-weight: bold;
+}
+
+.git-diff-header {
+    -fx-fill: #444444;
+    -fx-font-weight: bold;
+}

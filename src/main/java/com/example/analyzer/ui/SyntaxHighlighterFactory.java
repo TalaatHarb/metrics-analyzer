@@ -18,6 +18,8 @@ public class SyntaxHighlighterFactory {
             return YAMLSyntaxHighlighter.computeHighlighting(text);
         } else if (lower.endsWith(".properties")) {
             return PropertiesSyntaxHighlighter.computeHighlighting(text);
+        } else if (lower.endsWith(".diff") || lower.endsWith(".patch")) {
+            return GitDiffSyntaxHighlighter.computeHighlighting(text);
         }
         
         // No syntax highlighting for unknown file types

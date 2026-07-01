@@ -6,8 +6,10 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.text.Font;
 import javafx.concurrent.Task;
+import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.fxmisc.richtext.CodeArea;
+import org.fxmisc.richtext.LineNumberFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -253,13 +255,28 @@ public class GitCommitsTab {
             Dialog<Void> dialog = new Dialog<>();
             dialog.setTitle("Diff for commit " + commit.hash);
             dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-            
-            TextArea textArea = new TextArea(diffTask.getValue());
-            textArea.setEditable(false);
-            textArea.setFont(Font.font("Monospaced"));
-            textArea.setPrefSize(800, 600);
-            
-            dialog.getDialogPane().setContent(textArea);
+            dialog.setResizable(true);
+
+            CodeArea codeArea = new CodeArea();
+            codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
+            codeArea.setEditable(false);
+            codeArea.setWrapText(false);
+            codeArea.replaceText(diffTask.getValue());
+
+            String content = codeArea.getText();
+            var spans = GitDiffSyntaxHighlighter.computeHighlighting(content);
+            if (spans.length() == content.length()) {
+                codeArea.setStyleSpans(0, spans);
+            }
+
+            DialogPane pane = dialog.getDialogPane();
+            String cssResource = getClass().getResource("/syntax-highlighting.css").toExternalForm();
+            pane.getStylesheets().add(cssResource);
+            VirtualizedScrollPane<CodeArea> diffScrollPane = new VirtualizedScrollPane<>(codeArea);
+            diffScrollPane.setPrefSize(1200, 800);
+            pane.setMinSize(900, 600);
+            pane.setPrefSize(1200, 800);
+            pane.setContent(diffScrollPane);
             dialog.showAndWait();
         });
         new Thread(diffTask).start();
