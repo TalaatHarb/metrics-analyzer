@@ -24,6 +24,11 @@ import net.talaatharb.analyzer.service.BasicStaticAnalyzer;
 import net.talaatharb.analyzer.service.PMDStaticAnalyzer;
 import net.talaatharb.analyzer.service.CheckstyleStaticAnalyzer;
 import net.talaatharb.analyzer.service.SpotBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.FindBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.FindSecBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.InferStaticAnalyzer;
+import net.talaatharb.analyzer.service.SemgrepSastStaticAnalyzer;
+import net.talaatharb.analyzer.service.JQAssistantStaticAnalyzer;
 import javafx.collections.FXCollections;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -107,7 +112,17 @@ public class FileExplorerTab {
         TableView<StaticIssue> problemsTable = createProblemsTable();
         
         ComboBox<StaticAnalyzer> analyzerComboBox = new ComboBox<>();
-        List<StaticAnalyzer> allAnalyzers = Arrays.asList(new BasicStaticAnalyzer(), new PMDStaticAnalyzer(), new CheckstyleStaticAnalyzer(), new SpotBugsStaticAnalyzer());
+        List<StaticAnalyzer> allAnalyzers = Arrays.asList(
+            new BasicStaticAnalyzer(),
+            new PMDStaticAnalyzer(),
+            new CheckstyleStaticAnalyzer(),
+            new SpotBugsStaticAnalyzer(),
+            new FindBugsStaticAnalyzer(),
+            new FindSecBugsStaticAnalyzer(),
+            new InferStaticAnalyzer(),
+            new SemgrepSastStaticAnalyzer(),
+            new JQAssistantStaticAnalyzer()
+        );
         analyzerComboBox.getItems().addAll(allAnalyzers);
         analyzerComboBox.getSelectionModel().selectFirst();
         

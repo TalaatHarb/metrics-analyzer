@@ -51,6 +51,18 @@ Supported report sources:
 - **JaCoCo** (`target/site/jacoco/jacoco.xml` or `target/site/jacoco-aggregate/jacoco.xml`)
 - **Cobertura** (`target/site/cobertura/coverage.xml` or `target/coverage.xml`)
 
+## Static Analysis Scanners (File Explorer)
+
+The static analysis selector in **File Explorer** now includes additional scanners focused on Java code under `src/main/java/net/talaatharb/analyzer/service`:
+
+- FindBugs-compatible scan (via SpotBugs engine)
+- Find Security Bugs (FindSecBugs plugin)
+- Infer
+- SAST (Semgrep)
+- jQAssistant
+
+Some scanners require external tools to be installed and available on `PATH` (for example `infer` and `semgrep`).
+
 ## Screenshots
 
 ### Project Explorer & Static Analysis
