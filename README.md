@@ -89,6 +89,28 @@ The Metrics tab summary includes a **Project Health Dashboard** with debt catego
 
 Some scanners require external tools to be installed and available on `PATH` (for example `infer` and `semgrep`).
 
+## TODO Roadmap (Planned Improvements)
+
+- [x] Initial reducer-style PMD quick-fix expansion completed for:
+  - [x] `UnnecessaryModifier` (remove unnecessary `final` on private methods)
+  - [x] `SimplifyBooleanReturns` (collapse boolean if/else returns)
+- [x] Initial **Gradle** support for external static analyzers (PMD/Checkstyle/SpotBugs command + report-path detection).
+- [x] Initial **multi-module report discovery** for PMD/Checkstyle/SpotBugs (aggregate module reports, Maven + Gradle layouts).
+- [x] Initial **project-type detection foundation** added (Maven/Gradle/JAR/Kotlin/Scala/Clojure/JS/Python/Java-source classification) with unsupported-project guardrails for Java build analyzers.
+- [ ] Expand reducer-style quick fixes for PMD/Checkstyle/SpotBugs findings (for example: unnecessary modifiers, redundant constructors, simplifiable boolean returns, and safe import/annotation cleanups).
+- [ ] Add richer refactoring actions with precondition checks and rollback safety (batch apply, preview diff, and conflict reporting).
+- [ ] Improve multi-file and project-wide refactoring workflows (cross-file rename/extract and package-level transformations).
+- [ ] Support **multi-module Maven** projects with module-aware scanning, metrics rollups, and aggregated reports.
+- [ ] Add first-class **Gradle** project support (single-module and multi-module, including standard source-set conventions).
+- [ ] Add analysis support for compiled artifacts (**JARs**) in addition to source trees (class-level metrics/dependency extraction from bytecode where possible).
+- [ ] Extend JVM language support beyond Java:
+  - [ ] Kotlin projects
+  - [ ] Scala projects
+  - [ ] Clojure projects
+- [ ] Add support for common non-JVM project types (starting with TypeScript/JavaScript and Python) with language-appropriate metrics and static issue ingestion.
+- [ ] Introduce a fully pluggable project-type detection and analyzer adapter system to make onboarding new ecosystems faster.
+- [ ] Publish reference sample projects and end-to-end integration tests for each supported project type.
+
 ## Screenshots
 
 ### Project Explorer & Static Analysis

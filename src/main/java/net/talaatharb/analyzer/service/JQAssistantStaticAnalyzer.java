@@ -18,6 +18,10 @@ public class JQAssistantStaticAnalyzer implements StaticAnalyzer {
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
+        if (!ServicePackageStaticAnalyzerSupport.supportsJavaBuildAnalysis(rootPath)) {
+            issues.add(ServicePackageStaticAnalyzerSupport.unsupportedJavaBuildProjectIssue(getName(), rootPath));
+            return issues;
+        }
 
         ServicePackageStaticAnalyzerSupport.ProcessExecution execution = null;
         try {

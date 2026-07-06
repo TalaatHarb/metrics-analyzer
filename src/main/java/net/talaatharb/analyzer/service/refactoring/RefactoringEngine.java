@@ -18,6 +18,8 @@ public class RefactoringEngine {
                 new RemoveUselessParenthesesRefactoringReducer(),
                 new RemoveUnnecessaryImportRefactoringReducer(),
                 new RemoveUnnecessaryReturnRefactoringReducer(),
+                new RemoveUnnecessaryFinalModifierRefactoringReducer(),
+                new SimplifyBooleanReturnRefactoringReducer(),
                 new RenameSymbolRefactoringReducer(),
                 new RemoveStarImportRefactoringReducer(),
                 new RemoveUnnecessaryFullyQualifiedNameRefactoringReducer(),

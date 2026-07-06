@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 public class PMDStaticAnalyzer implements StaticAnalyzer {
+    private static final String TOOL_NAME = "PMD Analyzer (Maven/Gradle)";
 
     private static final Map<String, RuleMeta> KNOWN_RULE_META = Map.of(
             "UselessParentheses", new RuleMeta(
@@ -62,70 +63,33 @@ public class PMDStaticAnalyzer implements StaticAnalyzer {
 
     @Override
     public String getName() {
-        return "PMD Analyzer (Maven)";
+        return TOOL_NAME;
     }
 
     @Override
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
+        if (!ServicePackageStaticAnalyzerSupport.supportsJavaBuildAnalysis(rootPath)) {
+            issues.add(ServicePackageStaticAnalyzerSupport.unsupportedJavaBuildProjectIssue(getName(), rootPath));
+            return issues;
+        }
         
         try {
-            String mvnCmd = System.getProperty("os.name").toLowerCase().contains("win") ? "mvn.cmd" : "mvn";
-            ProcessBuilder pb = new ProcessBuilder(
-                mvnCmd, 
-                "org.apache.maven.plugins:maven-pmd-plugin:3.28.0:pmd", 
-                "-Dpmd.failOnViolation=false",
-                "-Dpmd.skipEmptyReport=false"
-            );
+            ProcessBuilder pb = new ProcessBuilder(ServicePackageStaticAnalyzerSupport.getPmdCommand(rootPath));
             pb.directory(rootPath.toFile());
             
-            File tempLog = File.createTempFile("pmd-maven-log", ".txt");
+            File tempLog = File.createTempFile("pmd-build-log", ".txt");
             pb.redirectOutput(tempLog);
             pb.redirectError(tempLog);
             
             Process process = pb.start();
             int exitCode = process.waitFor();
             
-            File pmdReport = rootPath.resolve("target").resolve("pmd.xml").toFile();
-            if (pmdReport.exists()) {
-                DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-                DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-                Document doc = dBuilder.parse(pmdReport);
-                doc.getDocumentElement().normalize();
-                
-                NodeList fileList = doc.getElementsByTagName("file");
-                for (int i = 0; i < fileList.getLength(); i++) {
-                    Element fileElement = (Element) fileList.item(i);
-                    String filePath = fileElement.getAttribute("name");
-                    Path path = Path.of(filePath);
-                    
-                    NodeList violationList = fileElement.getElementsByTagName("violation");
-                    for (int j = 0; j < violationList.getLength(); j++) {
-                        Element violation = (Element) violationList.item(j);
-                        int line = Integer.parseInt(violation.getAttribute("beginline"));
-                        String rule = violation.getAttribute("rule");
-                        String description = violation.getTextContent().trim();
-                        int priority = Integer.parseInt(violation.getAttribute("priority"));
-                        String severity = priority <= 2 ? "Error" : priority <= 4 ? "Warning" : "Info";
-
-                        RuleMeta meta = KNOWN_RULE_META.getOrDefault(rule, RuleMeta.UNKNOWN);
-                        issues.add(new StaticIssue(
-                                path,
-                                line,
-                                "[" + rule + "] " + description,
-                                severity,
-                                meta.category,
-                                rule,
-                                getName(),
-                                0.8,
-                                meta.fixability,
-                                meta.suggestedFix,
-                                meta.effort,
-                                List.of("pmd"),
-                                "open"
-                        ));
-                    }
+            List<Path> pmdReports = ServicePackageStaticAnalyzerSupport.getPmdReportPaths(rootPath);
+            if (!pmdReports.isEmpty()) {
+                for (Path reportPath : pmdReports) {
+                    parsePmdReport(reportPath.toFile(), issues);
                 }
                 
                 if (issues.isEmpty()) {
@@ -149,6 +113,47 @@ public class PMDStaticAnalyzer implements StaticAnalyzer {
             issues.add(new StaticIssue(rootPath, 0, "Failed to run PMD: " + e.getMessage(), "Error"));
         }
         return issues;
+    }
+
+    private void parsePmdReport(File pmdReport, List<StaticIssue> issues) throws Exception {
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+        Document doc = dBuilder.parse(pmdReport);
+        doc.getDocumentElement().normalize();
+
+        NodeList fileList = doc.getElementsByTagName("file");
+        for (int i = 0; i < fileList.getLength(); i++) {
+            Element fileElement = (Element) fileList.item(i);
+            String filePath = fileElement.getAttribute("name");
+            Path path = Path.of(filePath);
+
+            NodeList violationList = fileElement.getElementsByTagName("violation");
+            for (int j = 0; j < violationList.getLength(); j++) {
+                Element violation = (Element) violationList.item(j);
+                int line = Integer.parseInt(violation.getAttribute("beginline"));
+                String rule = violation.getAttribute("rule");
+                String description = violation.getTextContent().trim();
+                int priority = Integer.parseInt(violation.getAttribute("priority"));
+                String severity = priority <= 2 ? "Error" : priority <= 4 ? "Warning" : "Info";
+
+                RuleMeta meta = KNOWN_RULE_META.getOrDefault(rule, RuleMeta.UNKNOWN);
+                issues.add(new StaticIssue(
+                        path,
+                        line,
+                        "[" + rule + "] " + description,
+                        severity,
+                        meta.category,
+                        rule,
+                        getName(),
+                        0.8,
+                        meta.fixability,
+                        meta.suggestedFix,
+                        meta.effort,
+                        List.of("pmd"),
+                        "open"
+                ));
+            }
+        }
     }
 
     @Override

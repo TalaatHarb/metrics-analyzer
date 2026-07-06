@@ -16,7 +16,7 @@ import java.util.Map;
 
 public class CheckstyleStaticAnalyzer implements StaticAnalyzer {
 
-    private static final String TOOL_NAME = "Checkstyle Analyzer (Maven)";
+    private static final String TOOL_NAME = "Checkstyle Analyzer (Maven/Gradle)";
 
     /**
      * Known Checkstyle rule metadata: ruleSimpleName → [category, fixability, suggestedFix, effort]
@@ -57,56 +57,26 @@ public class CheckstyleStaticAnalyzer implements StaticAnalyzer {
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
+        if (!ServicePackageStaticAnalyzerSupport.supportsJavaBuildAnalysis(rootPath)) {
+            issues.add(ServicePackageStaticAnalyzerSupport.unsupportedJavaBuildProjectIssue(getName(), rootPath));
+            return issues;
+        }
 
         try {
-            String mvnCmd = System.getProperty("os.name").toLowerCase().contains("win") ? "mvn.cmd" : "mvn";
-            ProcessBuilder pb = new ProcessBuilder(
-                mvnCmd,
-                "org.apache.maven.plugins:maven-checkstyle-plugin:3.6.0:checkstyle",
-                "-Dcheckstyle.failOnViolation=false"
-            );
+            ProcessBuilder pb = new ProcessBuilder(ServicePackageStaticAnalyzerSupport.getCheckstyleCommand(rootPath));
             pb.directory(rootPath.toFile());
 
-            File tempLog = File.createTempFile("checkstyle-maven-log", ".txt");
+            File tempLog = File.createTempFile("checkstyle-build-log", ".txt");
             pb.redirectOutput(tempLog);
             pb.redirectError(tempLog);
 
             Process process = pb.start();
             int exitCode = process.waitFor();
 
-            File checkstyleReport = rootPath.resolve("target").resolve("checkstyle-result.xml").toFile();
-            if (checkstyleReport.exists()) {
-                DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-                DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-                Document doc = dBuilder.parse(checkstyleReport);
-                doc.getDocumentElement().normalize();
-
-                NodeList fileList = doc.getElementsByTagName("file");
-                for (int i = 0; i < fileList.getLength(); i++) {
-                    Element fileElement = (Element) fileList.item(i);
-                    String filePath = fileElement.getAttribute("name");
-                    Path path = Path.of(filePath);
-
-                    NodeList errorList = fileElement.getElementsByTagName("error");
-                    for (int j = 0; j < errorList.getLength(); j++) {
-                        Element error = (Element) errorList.item(j);
-                        String lineStr = error.getAttribute("line");
-                        int line = lineStr.isEmpty() ? 0 : Integer.parseInt(lineStr);
-                        String message = error.getAttribute("message");
-                        String severityAttr = error.getAttribute("severity");
-
-                        String severity = "Info";
-                        if ("error".equalsIgnoreCase(severityAttr)) severity = "Error";
-                        else if ("warning".equalsIgnoreCase(severityAttr)) severity = "Warning";
-
-                        String source = error.getAttribute("source");
-                        String rule = source;
-                        if (source.contains(".")) {
-                            rule = source.substring(source.lastIndexOf('.') + 1);
-                        }
-
-                        issues.add(buildIssue(path, line, rule, message, severity));
-                    }
+            List<Path> reportPaths = ServicePackageStaticAnalyzerSupport.getCheckstyleReportPaths(rootPath);
+            if (!reportPaths.isEmpty()) {
+                for (Path reportPath : reportPaths) {
+                    parseCheckstyleReport(reportPath.toFile(), issues);
                 }
 
                 if (issues.isEmpty()) {
@@ -132,6 +102,41 @@ public class CheckstyleStaticAnalyzer implements StaticAnalyzer {
             issues.add(new StaticIssue(rootPath, 0, "Failed to run Checkstyle: " + e.getMessage(), "Error"));
         }
         return issues;
+    }
+
+    private void parseCheckstyleReport(File checkstyleReport, List<StaticIssue> issues) throws Exception {
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+        Document doc = dBuilder.parse(checkstyleReport);
+        doc.getDocumentElement().normalize();
+
+        NodeList fileList = doc.getElementsByTagName("file");
+        for (int i = 0; i < fileList.getLength(); i++) {
+            Element fileElement = (Element) fileList.item(i);
+            String filePath = fileElement.getAttribute("name");
+            Path path = Path.of(filePath);
+
+            NodeList errorList = fileElement.getElementsByTagName("error");
+            for (int j = 0; j < errorList.getLength(); j++) {
+                Element error = (Element) errorList.item(j);
+                String lineStr = error.getAttribute("line");
+                int line = lineStr.isEmpty() ? 0 : Integer.parseInt(lineStr);
+                String message = error.getAttribute("message");
+                String severityAttr = error.getAttribute("severity");
+
+                String severity = "Info";
+                if ("error".equalsIgnoreCase(severityAttr)) severity = "Error";
+                else if ("warning".equalsIgnoreCase(severityAttr)) severity = "Warning";
+
+                String source = error.getAttribute("source");
+                String rule = source;
+                if (source.contains(".")) {
+                    rule = source.substring(source.lastIndexOf('.') + 1);
+                }
+
+                issues.add(buildIssue(path, line, rule, message, severity));
+            }
+        }
     }
 
     private StaticIssue buildIssue(Path file, int line, String rule, String message, String severity) {

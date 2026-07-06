@@ -353,6 +353,171 @@ class RefactoringEngineTest {
         assertFalse(result.isModified());
     }
 
+    // ---- UnnecessaryModifier ----
+
+    @Test
+    void shouldCreateRemoveUnnecessaryFinalModifierActionFromIssue(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("KeywordEnum.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class KeywordEnum {",
+                "    private final java.util.Map<String, Integer> buildDictionary() {",
+                "        return new java.util.HashMap<>();",
+                "    }",
+                "}"
+        ));
+
+        StaticIssue issue = new StaticIssue(
+                file, 2,
+                "[UnnecessaryModifier] Unnecessary modifier 'final' on method 'buildDictionary': private methods cannot be overridden",
+                "Warning",
+                "general", "UnnecessaryModifier", "PMD Analyzer (Maven)",
+                0.8, "none", "No suggested fix available.",
+                "unknown", List.of("pmd"), "New"
+        );
+
+        Optional<RefactoringAction> action = RefactoringActionFactory.fromIssue(issue);
+        assertTrue(action.isPresent());
+        assertEquals(RefactoringActionType.REMOVE_UNNECESSARY_FINAL_MODIFIER, action.get().getType());
+        assertEquals("buildDictionary", action.get().getAttributes().get("methodName"));
+        assertEquals(2, action.get().getLineNumber());
+    }
+
+    @Test
+    void shouldRemoveUnnecessaryFinalModifierFromPrivateMethodViaEngine(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("KeywordEnum.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class KeywordEnum {",
+                "    private final java.util.Map<String, Integer> buildDictionary() {",
+                "        return new java.util.HashMap<>();",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.REMOVE_UNNECESSARY_FINAL_MODIFIER,
+                file, 2,
+                Map.of("methodName", "buildDictionary")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("private java.util.Map<String, Integer> buildDictionary()"));
+        assertFalse(updated.contains("private final java.util.Map<String, Integer> buildDictionary()"));
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenPrivateFinalMethodDeclarationCannotBeFound(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("KeywordEnum.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class KeywordEnum {",
+                "    private java.util.Map<String, Integer> buildDictionary() {",
+                "        return new java.util.HashMap<>();",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.REMOVE_UNNECESSARY_FINAL_MODIFIER,
+                file, 2,
+                Map.of("methodName", "buildDictionary")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    // ---- SimplifyBooleanReturns ----
+
+    @Test
+    void shouldCreateSimplifyBooleanReturnActionFromIssue(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("FeatureFlag.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class FeatureFlag {",
+                "    boolean isEnabled(int value) {",
+                "        if (value > 10) {",
+                "            return true;",
+                "        } else {",
+                "            return false;",
+                "        }",
+                "    }",
+                "}"
+        ));
+
+        StaticIssue issue = new StaticIssue(
+                file, 3,
+                "[SimplifyBooleanReturns] Avoid redundant boolean returns in if-else.",
+                "Warning",
+                "code-style", "SimplifyBooleanReturns", "PMD Analyzer (Maven)",
+                0.8, "safe", "Replace if-else boolean returns with direct return.",
+                "small", List.of("pmd"), "New"
+        );
+
+        Optional<RefactoringAction> action = RefactoringActionFactory.fromIssue(issue);
+        assertTrue(action.isPresent());
+        assertEquals(RefactoringActionType.SIMPLIFY_BOOLEAN_RETURN, action.get().getType());
+        assertEquals(3, action.get().getLineNumber());
+    }
+
+    @Test
+    void shouldSimplifyBooleanReturnViaEngine(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("FeatureFlag.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class FeatureFlag {",
+                "    boolean isEnabled(int value) {",
+                "        if (value > 10) {",
+                "            return true;",
+                "        } else {",
+                "            return false;",
+                "        }",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.SIMPLIFY_BOOLEAN_RETURN,
+                file, 3, null
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("return value > 10;"));
+        assertFalse(updated.contains("return true;"));
+        assertFalse(updated.contains("return false;"));
+        assertFalse(updated.contains("} else {"));
+    }
+
+    @Test
+    void shouldSimplifyNegatedBooleanReturnViaEngine(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("FeatureFlag.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class FeatureFlag {",
+                "    boolean isDisabled(int value) {",
+                "        if (value > 10) return false; else return true;",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.SIMPLIFY_BOOLEAN_RETURN,
+                file, 3, null
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("return !(value > 10);"));
+        assertFalse(updated.contains("if (value > 10) return false; else return true;"));
+    }
+
     // ---- RenameSymbol ----
 
     @Test

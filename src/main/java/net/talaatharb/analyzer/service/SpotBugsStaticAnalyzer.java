@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
-    private static final String TOOL_NAME = "SpotBugs Analyzer (Maven)";
+    private static final String TOOL_NAME = "SpotBugs Analyzer (Maven/Gradle)";
     private static final Map<String, RuleMeta> KNOWN_RULE_META = Map.of(
             "NP_NULL_ON_SOME_PATH", new RuleMeta("correctness", "review",
                     "Add null-guard checks or validate the object before use.", "medium", List.of("null-safety", "spotbugs")),
@@ -57,19 +57,17 @@ public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
+        if (!ServicePackageStaticAnalyzerSupport.supportsJavaBuildAnalysis(rootPath)) {
+            issues.add(ServicePackageStaticAnalyzerSupport.unsupportedJavaBuildProjectIssue(getName(), rootPath));
+            return issues;
+        }
 
         try {
-            String mvnCmd = System.getProperty("os.name").toLowerCase().contains("win") ? "mvn.cmd" : "mvn";
-            ProcessBuilder pb = new ProcessBuilder(
-                mvnCmd,
-                "compile",
-                "com.github.spotbugs:spotbugs-maven-plugin:4.10.2.0:spotbugs",
-                "-Dspotbugs.failOnError=false"
-            );
+            ProcessBuilder pb = new ProcessBuilder(ServicePackageStaticAnalyzerSupport.getSpotbugsCommand(rootPath));
             pb.directory(rootPath.toFile());
 
             // Redirect output to a temp file
-            File tempLog = File.createTempFile("spotbugs-maven-log", ".txt");
+            File tempLog = File.createTempFile("spotbugs-build-log", ".txt");
             pb.redirectOutput(tempLog);
             pb.redirectError(tempLog);
 
@@ -77,65 +75,10 @@ public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
             Process process = pb.start();
             int exitCode = process.waitFor();
 
-            File spotbugsReport = rootPath.resolve("target").resolve("spotbugsXml.xml").toFile();
-            if (spotbugsReport.exists()) {
-                DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
-                DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-                Document doc = dBuilder.parse(spotbugsReport);
-                doc.getDocumentElement().normalize();
-
-                NodeList bugList = doc.getElementsByTagName("BugInstance");
-                for (int i = 0; i < bugList.getLength(); i++) {
-                    Element bug = (Element) bugList.item(i);
-                    String type = bug.getAttribute("type");
-                    String category = bug.getAttribute("category");
-                    int priority = Integer.parseInt(bug.getAttribute("priority"));
-                    
-                    String severity = "Info";
-                    if (priority == 1) severity = "Error";
-                    else if (priority == 2) severity = "Warning";
-
-                    String message = type;
-                    NodeList longMessageList = bug.getElementsByTagName("LongMessage");
-                    if (longMessageList.getLength() > 0) {
-                        message = longMessageList.item(0).getTextContent().trim();
-                    } else {
-                        NodeList shortMessageList = bug.getElementsByTagName("ShortMessage");
-                        if (shortMessageList.getLength() > 0) {
-                            message = shortMessageList.item(0).getTextContent().trim();
-                        }
-                    }
-
-                    int line = 0;
-                    Path path = rootPath;
-
-                    NodeList sourceLineList = bug.getElementsByTagName("SourceLine");
-                    for (int j = 0; j < sourceLineList.getLength(); j++) {
-                        Element sourceLine = (Element) sourceLineList.item(j);
-                        // We prefer the primary SourceLine or just take the first one found inside the BugInstance (not inside Class/Method)
-                        if (sourceLine.getParentNode() == bug || "true".equals(sourceLine.getAttribute("primary"))) {
-                            String startLine = sourceLine.getAttribute("start");
-                            if (!startLine.isEmpty()) {
-                                line = Integer.parseInt(startLine);
-                            }
-                            String sourcePath = sourceLine.getAttribute("sourcepath");
-                            if (!sourcePath.isEmpty()) {
-                                // Try main and test
-                                Path mainPath = rootPath.resolve("src").resolve("main").resolve("java").resolve(sourcePath);
-                                Path testPath = rootPath.resolve("src").resolve("test").resolve("java").resolve(sourcePath);
-                                if (mainPath.toFile().exists()) {
-                                    path = mainPath;
-                                } else if (testPath.toFile().exists()) {
-                                    path = testPath;
-                                } else {
-                                    path = Path.of(sourcePath);
-                                }
-                            }
-                            break;
-                        }
-                    }
-
-                    issues.add(buildIssue(path, line, type, category, message, severity, priority));
+            List<Path> reportPaths = ServicePackageStaticAnalyzerSupport.getSpotbugsReportPaths(rootPath);
+            if (!reportPaths.isEmpty()) {
+                for (Path reportPath : reportPaths) {
+                    parseSpotbugsReport(reportPath.toFile(), rootPath, issues);
                 }
 
                 if (issues.isEmpty()) {
@@ -159,6 +102,67 @@ public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
             issues.add(new StaticIssue(rootPath, 0, "Failed to run SpotBugs: " + e.getMessage(), "Error"));
         }
         return issues;
+    }
+
+    private void parseSpotbugsReport(File spotbugsReport, Path rootPath, List<StaticIssue> issues) throws Exception {
+        DocumentBuilderFactory dbFactory = DocumentBuilderFactory.newInstance();
+        DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
+        Document doc = dBuilder.parse(spotbugsReport);
+        doc.getDocumentElement().normalize();
+
+        NodeList bugList = doc.getElementsByTagName("BugInstance");
+        for (int i = 0; i < bugList.getLength(); i++) {
+            Element bug = (Element) bugList.item(i);
+            String type = bug.getAttribute("type");
+            String category = bug.getAttribute("category");
+            int priority = Integer.parseInt(bug.getAttribute("priority"));
+
+            String severity = "Info";
+            if (priority == 1) severity = "Error";
+            else if (priority == 2) severity = "Warning";
+
+            String message = type;
+            NodeList longMessageList = bug.getElementsByTagName("LongMessage");
+            if (longMessageList.getLength() > 0) {
+                message = longMessageList.item(0).getTextContent().trim();
+            } else {
+                NodeList shortMessageList = bug.getElementsByTagName("ShortMessage");
+                if (shortMessageList.getLength() > 0) {
+                    message = shortMessageList.item(0).getTextContent().trim();
+                }
+            }
+
+            int line = 0;
+            Path path = rootPath;
+
+            NodeList sourceLineList = bug.getElementsByTagName("SourceLine");
+            for (int j = 0; j < sourceLineList.getLength(); j++) {
+                Element sourceLine = (Element) sourceLineList.item(j);
+                // We prefer the primary SourceLine or just take the first one found inside the BugInstance (not inside Class/Method)
+                if (sourceLine.getParentNode() == bug || "true".equals(sourceLine.getAttribute("primary"))) {
+                    String startLine = sourceLine.getAttribute("start");
+                    if (!startLine.isEmpty()) {
+                        line = Integer.parseInt(startLine);
+                    }
+                    String sourcePath = sourceLine.getAttribute("sourcepath");
+                    if (!sourcePath.isEmpty()) {
+                        // Try main and test
+                        Path mainPath = rootPath.resolve("src").resolve("main").resolve("java").resolve(sourcePath);
+                        Path testPath = rootPath.resolve("src").resolve("test").resolve("java").resolve(sourcePath);
+                        if (mainPath.toFile().exists()) {
+                            path = mainPath;
+                        } else if (testPath.toFile().exists()) {
+                            path = testPath;
+                        } else {
+                            path = Path.of(sourcePath);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            issues.add(buildIssue(path, line, type, category, message, severity, priority));
+        }
     }
 
     @Override

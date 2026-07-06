@@ -15,6 +15,7 @@ public final class RefactoringActionFactory {
     private static final Pattern SINGLE_QUOTED_CLASS = Pattern.compile("'([\\w$.]+)'");
     private static final Pattern QUALIFIER_AND_CLASS = Pattern.compile("qualifier\\s+'([\\w.]+)'\\s*:\\s*'([\\w$]+)'");
     private static final Pattern MAGIC_NUMBER_LITERAL = Pattern.compile("'([^']+)'\\s+is\\s+a\\s+magic\\s+number");
+    private static final Pattern METHOD_NAME = Pattern.compile("method\\s+'([\\w$]+)'");
     // Matches "import foo.bar.*" or "'foo.bar'" style package mentions
     private static final Pattern STAR_IMPORT_PACKAGE = Pattern.compile("import\\s+([\\w.]+)\\s*\\.\\s*\\*");
     private static final Pattern SINGLE_QUOTED_PACKAGE = Pattern.compile("'([\\w.]+)\\.\\*'");
@@ -67,6 +68,29 @@ public final class RefactoringActionFactory {
         if (isUnnecessaryReturnIssue(issue)) {
             return Optional.of(new RefactoringAction(
                     RefactoringActionType.REMOVE_UNNECESSARY_RETURN,
+                    issue.getFile().toAbsolutePath().normalize(),
+                    issue.getLineNumber(),
+                    Collections.emptyMap()
+            ));
+        }
+
+        if (isUnnecessaryModifierIssue(issue)) {
+            String methodName = extractMethodName(issue.getDescription());
+            if (methodName != null) {
+                Map<String, String> attrs = new HashMap<>();
+                attrs.put("methodName", methodName);
+                return Optional.of(new RefactoringAction(
+                        RefactoringActionType.REMOVE_UNNECESSARY_FINAL_MODIFIER,
+                        issue.getFile().toAbsolutePath().normalize(),
+                        issue.getLineNumber(),
+                        attrs
+                ));
+            }
+        }
+
+        if (isSimplifyBooleanReturnsIssue(issue)) {
+            return Optional.of(new RefactoringAction(
+                    RefactoringActionType.SIMPLIFY_BOOLEAN_RETURN,
                     issue.getFile().toAbsolutePath().normalize(),
                     issue.getLineNumber(),
                     Collections.emptyMap()
@@ -155,6 +179,23 @@ public final class RefactoringActionFactory {
         String desc = issue.getDescription();
         return "MagicNumber".equals(ruleId)
                 || (desc != null && desc.contains("[MagicNumber]"));
+    }
+
+    private static boolean isUnnecessaryModifierIssue(StaticIssue issue) {
+        String ruleId = issue.getRuleId();
+        String desc = issue.getDescription();
+        return "UnnecessaryModifier".equals(ruleId)
+                || (desc != null
+                && desc.contains("[UnnecessaryModifier]")
+                && desc.contains("modifier 'final'")
+                && desc.contains("private methods cannot be overridden"));
+    }
+
+    private static boolean isSimplifyBooleanReturnsIssue(StaticIssue issue) {
+        String ruleId = issue.getRuleId();
+        String desc = issue.getDescription();
+        return "SimplifyBooleanReturns".equals(ruleId)
+                || (desc != null && desc.contains("[SimplifyBooleanReturns]"));
     }
 
     /**
@@ -255,5 +296,13 @@ public final class RefactoringActionFactory {
         }
 
         return null;
+    }
+
+    private static String extractMethodName(String description) {
+        if (description == null) {
+            return null;
+        }
+        Matcher matcher = METHOD_NAME.matcher(description);
+        return matcher.find() ? matcher.group(1) : null;
     }
 }
