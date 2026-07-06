@@ -109,28 +109,19 @@ public class ExtractConstantRefactoringReducer implements ProjectRefactoringRedu
 
         if (!replaceAllOccurrences && hintedIndex >= 0 && hintedIndex < lines.size()) {
             String line = lines.get(hintedIndex);
-            if (isReplaceableCodeLine(line)) {
-                String replaced = replaceFirstLiteral(line, literal, constantName);
-                if (!replaced.equals(line)) {
-                    lines.set(hintedIndex, replaced);
-                    return 1;
-                }
+            LineReplacement hinted = replaceLiteralInLine(line, literal, constantName, false);
+            if (hinted.replacements > 0) {
+                lines.set(hintedIndex, hinted.line);
+                return hinted.replacements;
             }
         }
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-            if (!isReplaceableCodeLine(line)) {
-                continue;
-            }
-
-            String replaced = replaceAllOccurrences
-                    ? replaceAllLiterals(line, literal, constantName)
-                    : replaceFirstLiteral(line, literal, constantName);
-
-            if (!replaced.equals(line)) {
-                lines.set(i, replaced);
-                replacementCount++;
+            LineReplacement replaced = replaceLiteralInLine(line, literal, constantName, replaceAllOccurrences);
+            if (replaced.replacements > 0) {
+                lines.set(i, replaced.line);
+                replacementCount += replaced.replacements;
                 if (!replaceAllOccurrences) {
                     break;
                 }
@@ -139,41 +130,93 @@ public class ExtractConstantRefactoringReducer implements ProjectRefactoringRedu
         return replacementCount;
     }
 
-    private boolean isReplaceableCodeLine(String line) {
+    private LineReplacement replaceLiteralInLine(
+            String line,
+            String literal,
+            String replacement,
+            boolean replaceAllOccurrences
+    ) {
         if (line == null || line.isBlank()) {
-            return false;
+            return LineReplacement.none(line);
         }
         String trimmed = line.trim();
         if (trimmed.startsWith("@")) {
-            return false; // avoid annotations
+            return LineReplacement.none(line); // avoid annotations
         }
         if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*") || trimmed.startsWith("*/")) {
-            return false; // comment lines
+            return LineReplacement.none(line); // comment lines
         }
-        if (line.contains("//") || line.contains("/*") || line.contains("*/")) {
-            return false; // conservative: skip mixed code/comment lines
+        if (line.contains("/*") || line.contains("*/")) {
+            return LineReplacement.none(line); // keep conservative behavior for block comments
         }
-        return true;
-    }
 
-    private String replaceFirstLiteral(String line, String literal, String replacement) {
-        if (line == null || line.isEmpty() || !line.contains(literal)) {
-            return line;
-        }
+        int inlineCommentIdx = findInlineCommentStart(line);
+        String codePart = inlineCommentIdx >= 0 ? line.substring(0, inlineCommentIdx) : line;
+        String commentPart = inlineCommentIdx >= 0 ? line.substring(inlineCommentIdx) : "";
+
         Pattern literalPattern = Pattern.compile("(?<![\\w$])" + Pattern.quote(literal) + "(?![\\w$])");
-        Matcher matcher = literalPattern.matcher(line);
+        Matcher matcher = literalPattern.matcher(codePart);
         if (!matcher.find()) {
-            return line;
+            return LineReplacement.none(line);
         }
-        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+
+        if (!replaceAllOccurrences) {
+            String replacedCode = matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+            return new LineReplacement(replacedCode + commentPart, 1);
+        }
+
+        int count = 1;
+        while (matcher.find()) {
+            count++;
+        }
+        String replacedCode = literalPattern.matcher(codePart).replaceAll(Matcher.quoteReplacement(replacement));
+        return new LineReplacement(replacedCode + commentPart, count);
     }
 
-    private String replaceAllLiterals(String line, String literal, String replacement) {
-        if (line == null || line.isEmpty() || !line.contains(literal)) {
-            return line;
+    private int findInlineCommentStart(String line) {
+        boolean inSingleQuote = false;
+        boolean inDoubleQuote = false;
+        boolean escaped = false;
+
+        for (int i = 0; i < line.length() - 1; i++) {
+            char ch = line.charAt(i);
+            char next = line.charAt(i + 1);
+
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if ((inSingleQuote || inDoubleQuote) && ch == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (!inDoubleQuote && ch == '\'') {
+                inSingleQuote = !inSingleQuote;
+                continue;
+            }
+            if (!inSingleQuote && ch == '"') {
+                inDoubleQuote = !inDoubleQuote;
+                continue;
+            }
+            if (!inSingleQuote && !inDoubleQuote && ch == '/' && next == '/') {
+                return i;
+            }
         }
-        Pattern literalPattern = Pattern.compile("(?<![\\w$])" + Pattern.quote(literal) + "(?![\\w$])");
-        return literalPattern.matcher(line).replaceAll(Matcher.quoteReplacement(replacement));
+        return -1;
+    }
+
+    private static final class LineReplacement {
+        private final String line;
+        private final int replacements;
+
+        private LineReplacement(String line, int replacements) {
+            this.line = line;
+            this.replacements = replacements;
+        }
+
+        private static LineReplacement none(String line) {
+            return new LineReplacement(line, 0);
+        }
     }
 
     private String extractIndent(String line) {

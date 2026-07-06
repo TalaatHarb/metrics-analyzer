@@ -751,4 +751,27 @@ class RefactoringEngineTest {
         assertTrue(updated.contains("// 30 should remain in comment"));
         assertTrue(updated.contains("int a = DEFAULT_TIMEOUT;"));
     }
+
+    @Test
+    void shouldReplaceCodeBeforeInlineCommentAndPreserveComment(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    int a = 30; // keep 30 in comment",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 2,
+                Map.of("literal", "30", "constantName", "DEFAULT_TIMEOUT", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("int a = DEFAULT_TIMEOUT; // keep 30 in comment"));
+    }
 }

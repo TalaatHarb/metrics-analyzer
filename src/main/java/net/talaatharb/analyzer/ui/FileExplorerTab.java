@@ -43,8 +43,10 @@ import javafx.scene.control.SeparatorMenuItem;
 import javafx.concurrent.Task;
 
 import javafx.scene.control.ContextMenu;
+import javafx.scene.control.ContentDisplay;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableCell;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.Alert;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextInputDialog;
@@ -474,11 +476,69 @@ public class FileExplorerTab {
 
         TableColumn<CompileErrorRow, String> msgCol = new TableColumn<>("Message");
         msgCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getMessage()));
+        msgCol.setCellFactory(tc -> new TableCell<>() {
+            private final Label label = new Label();
+            {
+                label.setWrapText(true);
+                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                setGraphic(label);
+                label.maxWidthProperty().bind(tc.widthProperty().subtract(12));
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    label.setText(null);
+                    setTooltip(null);
+                } else {
+                    label.setText(item);
+                    setTooltip(new Tooltip(item));
+                }
+            }
+        });
 
         TableColumn<CompileErrorRow, String> detailsCol = new TableColumn<>("Details");
-        detailsCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getDetails()));
+        detailsCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(toMultilineDetails(v.getValue().getDetails())));
+        detailsCol.setCellFactory(tc -> new TableCell<>() {
+            private final Label label = new Label();
+            {
+                label.setWrapText(true);
+                setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
+                setGraphic(label);
+                label.maxWidthProperty().bind(tc.widthProperty().subtract(12));
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null || item.isBlank()) {
+                    label.setText(null);
+                    setTooltip(null);
+                } else {
+                    label.setText(item);
+                    setTooltip(new Tooltip(item));
+                }
+            }
+        });
 
         table.getColumns().addAll(fileCol, lineCol, colCol, msgCol, detailsCol);
+        table.setRowFactory(tv -> {
+            TableRow<CompileErrorRow> row = new TableRow<>();
+            MenuItem copyItem = new MenuItem("Copy Error");
+            copyItem.setOnAction(e -> copyCompileErrorToClipboard(row.getItem()));
+            MenuItem showDetailsItem = new MenuItem("Show Full Error Details");
+            showDetailsItem.setOnAction(e -> showCompileErrorDetails(row.getItem()));
+            ContextMenu rowMenu = new ContextMenu(copyItem, showDetailsItem);
+            rowMenu.setOnShowing(e -> {
+                CompileErrorRow item = row.getItem();
+                boolean disabled = item == null;
+                copyItem.setDisable(disabled);
+                showDetailsItem.setDisable(disabled);
+            });
+            row.emptyProperty().addListener((obs, wasEmpty, isEmpty) -> row.setContextMenu(isEmpty ? null : rowMenu));
+            return row;
+        });
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, selected) -> {
             if (selected == null || selected.getFile() == null) {
                 return;
@@ -492,6 +552,55 @@ public class FileExplorerTab {
             codeArea.requestFollowCaret();
         });
         return table;
+    }
+
+    private String toMultilineDetails(String details) {
+        if (details == null || details.isBlank()) {
+            return "";
+        }
+        return details.replace(" | ", System.lineSeparator());
+    }
+
+    private void copyCompileErrorToClipboard(CompileErrorRow error) {
+        if (error == null) {
+            return;
+        }
+        Clipboard clipboard = Clipboard.getSystemClipboard();
+        ClipboardContent content = new ClipboardContent();
+        content.putString(formatCompileErrorForClipboard(error));
+        clipboard.setContent(content);
+    }
+
+    private String formatCompileErrorForClipboard(CompileErrorRow error) {
+        if (error == null) {
+            return "";
+        }
+        String details = toMultilineDetails(error.getDetails());
+        StringBuilder text = new StringBuilder();
+        text.append("File: ").append(error.getDisplayFile(rootPath)).append(System.lineSeparator());
+        text.append("Line: ").append(error.getLine()).append(System.lineSeparator());
+        text.append("Column: ").append(error.getColumn()).append(System.lineSeparator());
+        text.append("Message: ").append(error.getMessage());
+        if (!details.isBlank()) {
+            text.append(System.lineSeparator()).append("Details:").append(System.lineSeparator()).append(details);
+        }
+        return text.toString();
+    }
+
+    private void showCompileErrorDetails(CompileErrorRow error) {
+        if (error == null) {
+            return;
+        }
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Compile Error Details");
+        alert.setHeaderText(error.getDisplayFile(rootPath) + ":" + error.getLine() + ":" + error.getColumn());
+        TextArea detailsArea = new TextArea(formatCompileErrorForClipboard(error));
+        detailsArea.setEditable(false);
+        detailsArea.setWrapText(false);
+        detailsArea.setPrefColumnCount(90);
+        detailsArea.setPrefRowCount(16);
+        alert.getDialogPane().setContent(detailsArea);
+        alert.showAndWait();
     }
     
     private void runScopedAnalysis(TableView<StaticIssue> problemsTable, StaticAnalyzer analyzer, String scope, Runnable onComplete) {
