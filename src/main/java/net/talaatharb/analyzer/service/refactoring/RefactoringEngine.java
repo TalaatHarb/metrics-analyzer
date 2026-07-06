@@ -20,7 +20,8 @@ public class RefactoringEngine {
                 new RemoveUnnecessaryReturnRefactoringReducer(),
                 new RenameSymbolRefactoringReducer(),
                 new RemoveStarImportRefactoringReducer(),
-                new RemoveUnnecessaryFullyQualifiedNameRefactoringReducer()
+                new RemoveUnnecessaryFullyQualifiedNameRefactoringReducer(),
+                new ExtractConstantRefactoringReducer()
         ));
     }
 

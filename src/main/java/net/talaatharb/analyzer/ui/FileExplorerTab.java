@@ -89,6 +89,8 @@ public class FileExplorerTab {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileExplorerTab.class);
     private static final Pattern MAVEN_COMPILE_ERROR_PATTERN = Pattern.compile(
             "^\\[ERROR\\]\\s+(.+?\\.java):\\[(\\d+),(\\d+)\\]\\s+(.+)$");
+    private static final Pattern MAVEN_COMPILE_DETAIL_PATTERN = Pattern.compile(
+            "^\\[ERROR\\]\\s+(symbol|location):\\s+(.+)$");
     private final CodeArea codeArea;
     private final TreeView<File> fileTree;
     private final Label currentFileLabel;
@@ -465,10 +467,18 @@ public class FileExplorerTab {
         lineCol.setPrefWidth(60);
         lineCol.setMaxWidth(80);
 
+        TableColumn<CompileErrorRow, Number> colCol = new TableColumn<>("Col");
+        colCol.setCellValueFactory(v -> new ReadOnlyObjectWrapper<>(v.getValue().getColumn()));
+        colCol.setPrefWidth(60);
+        colCol.setMaxWidth(80);
+
         TableColumn<CompileErrorRow, String> msgCol = new TableColumn<>("Message");
         msgCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getMessage()));
 
-        table.getColumns().addAll(fileCol, lineCol, msgCol);
+        TableColumn<CompileErrorRow, String> detailsCol = new TableColumn<>("Details");
+        detailsCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getDetails()));
+
+        table.getColumns().addAll(fileCol, lineCol, colCol, msgCol, detailsCol);
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, selected) -> {
             if (selected == null || selected.getFile() == null) {
                 return;
@@ -818,13 +828,26 @@ public class FileExplorerTab {
 
         MenuItem renameItem = new MenuItem("Rename Symbol in File…");
         renameItem.setOnAction(e -> handleRenameSymbol(area));
-        ContextMenu codeAreaMenu = new ContextMenu(renameItem);
+        MenuItem extractConstantItem = new MenuItem("Extract Constant…");
+        extractConstantItem.setOnAction(e -> handleExtractConstant(area, false));
+        MenuItem extractConstantAllItem = new MenuItem("Extract Constant (All Occurrences)…");
+        extractConstantAllItem.setOnAction(e -> handleExtractConstant(area, true));
+        ContextMenu codeAreaMenu = new ContextMenu(renameItem, extractConstantItem, extractConstantAllItem);
         codeAreaMenu.setOnShowing(e -> {
             String word = getWordAtCaret(area);
+            String literal = getLiteralAtCaretOrSelection(area);
             renameItem.setDisable(word == null || word.isBlank() || currentFilePath == null);
             renameItem.setText(word != null && !word.isBlank()
                     ? "Rename '" + word + "' in File…"
                     : "Rename Symbol in File…");
+            extractConstantItem.setDisable(literal == null || literal.isBlank() || currentFilePath == null);
+            extractConstantItem.setText(literal != null && !literal.isBlank()
+                    ? "Extract Constant from '" + literal + "'…"
+                    : "Extract Constant…");
+            extractConstantAllItem.setDisable(literal == null || literal.isBlank() || currentFilePath == null);
+            extractConstantAllItem.setText(literal != null && !literal.isBlank()
+                    ? "Extract Constant (All) from '" + literal + "'…"
+                    : "Extract Constant (All Occurrences)…");
         });
         area.setContextMenu(codeAreaMenu);
 
@@ -908,6 +931,102 @@ public class FileExplorerTab {
                 LOGGER.error("Rename failed", ex);
             }
         });
+    }
+
+    private void handleExtractConstant(CodeArea area, boolean replaceAllOccurrences) {
+        if (currentFilePath == null) {
+            return;
+        }
+        String literal = getLiteralAtCaretOrSelection(area);
+        if (literal == null || literal.isBlank()) {
+            return;
+        }
+
+        String defaultName = "EXTRACTED_CONSTANT";
+        TextInputDialog dialog = new TextInputDialog(defaultName);
+        dialog.setTitle("Extract Constant");
+        dialog.setHeaderText("Extract literal '" + literal + "' in current file");
+        dialog.setContentText("Constant name:");
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(name -> {
+            if (name == null || name.isBlank()) {
+                return;
+            }
+            Map<String, String> attrs = new HashMap<>();
+            attrs.put("literal", literal);
+            attrs.put("constantName", name.trim());
+            attrs.put("replaceAllOccurrences", Boolean.toString(replaceAllOccurrences));
+            RefactoringAction action = new RefactoringAction(
+                    RefactoringActionType.EXTRACT_CONSTANT,
+                    currentFilePath.toAbsolutePath().normalize(),
+                    area.getCurrentParagraph() + 1,
+                    attrs
+            );
+            try {
+                RefactoringResult refResult = refactoringEngine.apply(
+                        new ProjectRefactoringState(rootPath != null ? rootPath : currentFilePath.getParent()),
+                        action
+                );
+                if (refResult.isModified()) {
+                    loadFileContent(currentFilePath);
+                    runCompileSafetyGate();
+                    LOGGER.info("Extract Constant: {}", refResult.getMessage());
+                } else {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Extract Constant");
+                    alert.setHeaderText(null);
+                    alert.setContentText(refResult.getMessage());
+                    alert.showAndWait();
+                }
+            } catch (IOException ex) {
+                LOGGER.error("Extract constant failed", ex);
+            }
+        });
+    }
+
+    private String getLiteralAtCaretOrSelection(CodeArea area) {
+        String selected = area.getSelectedText();
+        if (selected != null) {
+            String trimmed = selected.trim();
+            if (isSupportedLiteral(trimmed)) {
+                return trimmed;
+            }
+        }
+
+        int caretPos = area.getCaretPosition();
+        String text = area.getText();
+        if (caretPos < 0 || caretPos > text.length() || text.isEmpty()) {
+            return null;
+        }
+        int lineStart = text.lastIndexOf('\n', Math.max(0, caretPos - 1));
+        int lineEnd = text.indexOf('\n', caretPos);
+        int from = lineStart < 0 ? 0 : lineStart + 1;
+        int to = lineEnd < 0 ? text.length() : lineEnd;
+        String line = text.substring(from, to);
+        int localCaret = Math.max(0, Math.min(line.length(), caretPos - from));
+
+        Pattern literalPattern = Pattern.compile("\"(?:[^\"\\\\]|\\\\.)*\"|'(?:[^'\\\\]|\\\\.)'|[-+]?\\d+(?:\\.\\d+)?(?:[fFdDlL])?|\\b(?:true|false)\\b");
+        Matcher matcher = literalPattern.matcher(line);
+        while (matcher.find()) {
+            if (localCaret >= matcher.start() && localCaret <= matcher.end()) {
+                String literal = matcher.group();
+                return isSupportedLiteral(literal) ? literal : null;
+            }
+        }
+        return null;
+    }
+
+    private boolean isSupportedLiteral(String literal) {
+        if (literal == null || literal.isBlank()) {
+            return false;
+        }
+        String v = literal.trim();
+        return v.matches("\"(?:[^\"\\\\]|\\\\.)*\"")
+                || v.matches("'(?:[^'\\\\]|\\\\.)'")
+                || v.matches("[-+]?\\d+[lL]?")
+                || v.matches("[-+]?(?:\\d+\\.\\d*|\\d*\\.\\d+)(?:[eE][-+]?\\d+)?[fFdD]?")
+                || "true".equals(v)
+                || "false".equals(v);
     }
 
     private IntFunction<Node> createCoverageAwareLineFactory(CodeArea area) {
@@ -1248,6 +1367,7 @@ public class FileExplorerTab {
         Deque<String> lastLines = new ArrayDeque<>();
         List<CompileErrorRow> parsedErrors = new ArrayList<>();
         Set<String> seenErrorKeys = new LinkedHashSet<>();
+        CompileErrorDraft currentError = null;
         try {
             Process process = builder.start();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -1257,15 +1377,20 @@ public class FileExplorerTab {
                         lastLines.removeFirst();
                     }
                     lastLines.addLast(line);
-                    CompileErrorRow parsed = parseCompileErrorLine(line);
-                    if (parsed != null) {
-                        String key = parsed.getFile() + "|" + parsed.getLine() + "|" + parsed.getMessage();
-                        if (seenErrorKeys.add(key)) {
-                            parsedErrors.add(parsed);
-                        }
+                    CompileErrorDraft primary = parsePrimaryCompileErrorLine(line);
+                    if (primary != null) {
+                        addCompileErrorIfNew(currentError, seenErrorKeys, parsedErrors);
+                        currentError = primary;
+                        continue;
+                    }
+
+                    String secondary = parseCompileErrorSecondaryLine(line);
+                    if (secondary != null && currentError != null) {
+                        currentError.appendDetail(secondary);
                     }
                 }
             }
+            addCompileErrorIfNew(currentError, seenErrorKeys, parsedErrors);
             int exitCode = process.waitFor();
             String tail = String.join(System.lineSeparator(), lastLines);
             return new CompileCheckResult(exitCode == 0, tail, parsedErrors);
@@ -1275,7 +1400,19 @@ public class FileExplorerTab {
         }
     }
 
-    private CompileErrorRow parseCompileErrorLine(String line) {
+    private void addCompileErrorIfNew(CompileErrorDraft draft, Set<String> seenErrorKeys, List<CompileErrorRow> parsedErrors) {
+        if (draft == null) {
+            return;
+        }
+        CompileErrorRow parsed = draft.toRow();
+        String key = parsed.getFile() + "|" + parsed.getLine() + "|" + parsed.getColumn()
+                + "|" + parsed.getMessage() + "|" + parsed.getDetails();
+        if (seenErrorKeys.add(key)) {
+            parsedErrors.add(parsed);
+        }
+    }
+
+    private CompileErrorDraft parsePrimaryCompileErrorLine(String line) {
         if (line == null) {
             return null;
         }
@@ -1288,8 +1425,23 @@ public class FileExplorerTab {
             return null;
         }
         int lineNumber = parsePositiveInt(matcher.group(2));
+        int column = parsePositiveInt(matcher.group(3));
         String message = matcher.group(4) == null ? "" : matcher.group(4).trim();
-        return new CompileErrorRow(file, lineNumber, message);
+        return new CompileErrorDraft(file, lineNumber, column, message);
+    }
+
+    private String parseCompileErrorSecondaryLine(String line) {
+        if (line == null) {
+            return null;
+        }
+        Matcher matcher = MAVEN_COMPILE_DETAIL_PATTERN.matcher(line);
+        if (matcher.find()) {
+            return matcher.group(1) + ": " + matcher.group(2).trim();
+        }
+        if (line.startsWith("[ERROR] cannot find symbol")) {
+            return "cannot find symbol";
+        }
+        return null;
     }
 
     private static int parsePositiveInt(String value) {
@@ -1500,15 +1652,46 @@ public class FileExplorerTab {
         }
     }
 
+    private static final class CompileErrorDraft {
+        private final Path file;
+        private final int line;
+        private final int column;
+        private final String message;
+        private final List<String> details = new ArrayList<>();
+
+        private CompileErrorDraft(Path file, int line, int column, String message) {
+            this.file = file;
+            this.line = line;
+            this.column = column;
+            this.message = message == null ? "" : message;
+        }
+
+        private void appendDetail(String detail) {
+            if (detail == null || detail.isBlank()) {
+                return;
+            }
+            details.add(detail.trim());
+        }
+
+        private CompileErrorRow toRow() {
+            String joinedDetails = details.isEmpty() ? "" : String.join(" | ", details);
+            return new CompileErrorRow(file, line, column, message, joinedDetails);
+        }
+    }
+
     private static final class CompileErrorRow {
         private final Path file;
         private final int line;
+        private final int column;
         private final String message;
+        private final String details;
 
-        private CompileErrorRow(Path file, int line, String message) {
+        private CompileErrorRow(Path file, int line, int column, String message, String details) {
             this.file = file;
             this.line = line;
+            this.column = column;
             this.message = message == null ? "" : message;
+            this.details = details == null ? "" : details;
         }
 
         private Path getFile() {
@@ -1519,8 +1702,16 @@ public class FileExplorerTab {
             return line;
         }
 
+        private int getColumn() {
+            return column;
+        }
+
         private String getMessage() {
             return message;
+        }
+
+        private String getDetails() {
+            return details;
         }
 
         private String getDisplayFile(Path projectRoot) {

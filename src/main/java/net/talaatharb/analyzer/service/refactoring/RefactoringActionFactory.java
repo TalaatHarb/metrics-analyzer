@@ -14,6 +14,7 @@ public final class RefactoringActionFactory {
     private static final Pattern BACKTICK_EXPRESSION = Pattern.compile("`([^`]+)`");
     private static final Pattern SINGLE_QUOTED_CLASS = Pattern.compile("'([\\w$.]+)'");
     private static final Pattern QUALIFIER_AND_CLASS = Pattern.compile("qualifier\\s+'([\\w.]+)'\\s*:\\s*'([\\w$]+)'");
+    private static final Pattern MAGIC_NUMBER_LITERAL = Pattern.compile("'([^']+)'\\s+is\\s+a\\s+magic\\s+number");
     // Matches "import foo.bar.*" or "'foo.bar'" style package mentions
     private static final Pattern STAR_IMPORT_PACKAGE = Pattern.compile("import\\s+([\\w.]+)\\s*\\.\\s*\\*");
     private static final Pattern SINGLE_QUOTED_PACKAGE = Pattern.compile("'([\\w.]+)\\.\\*'");
@@ -98,6 +99,20 @@ public final class RefactoringActionFactory {
             }
         }
 
+        if (isMagicNumberIssue(issue)) {
+            String literal = extractMagicNumberLiteral(issue);
+            if (literal != null) {
+                Map<String, String> attrs = new HashMap<>();
+                attrs.put("literal", literal);
+                return Optional.of(new RefactoringAction(
+                        RefactoringActionType.EXTRACT_CONSTANT,
+                        issue.getFile().toAbsolutePath().normalize(),
+                        issue.getLineNumber(),
+                        attrs
+                ));
+            }
+        }
+
         return Optional.empty();
     }
 
@@ -133,6 +148,13 @@ public final class RefactoringActionFactory {
         String desc = issue.getDescription();
         return "UnnecessaryFullyQualifiedName".equals(ruleId)
                 || (desc != null && desc.contains("[UnnecessaryFullyQualifiedName]"));
+    }
+
+    private static boolean isMagicNumberIssue(StaticIssue issue) {
+        String ruleId = issue.getRuleId();
+        String desc = issue.getDescription();
+        return "MagicNumber".equals(ruleId)
+                || (desc != null && desc.contains("[MagicNumber]"));
     }
 
     /**
@@ -204,5 +226,34 @@ public final class RefactoringActionFactory {
         attrs.put("qualifier", qualifier);
         attrs.put("className", className);
         return attrs;
+    }
+
+    private static String extractMagicNumberLiteral(StaticIssue issue) {
+        String description = issue.getDescription();
+        if (description != null) {
+            Matcher matcher = MAGIC_NUMBER_LITERAL.matcher(description);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+        }
+
+        Path file = issue.getFile();
+        int lineNum = issue.getLineNumber();
+        if (file != null && lineNum > 0 && java.nio.file.Files.isRegularFile(file)) {
+            try {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(file);
+                if (lineNum - 1 < lines.size()) {
+                    String line = lines.get(lineNum - 1);
+                    Matcher numeric = Pattern.compile("(?<![\\w$])[-+]?\\d+(?:\\.\\d+)?(?:[fFdDlL])?(?![\\w$])").matcher(line);
+                    if (numeric.find()) {
+                        return numeric.group();
+                    }
+                }
+            } catch (java.io.IOException e) {
+                // best effort
+            }
+        }
+
+        return null;
     }
 }

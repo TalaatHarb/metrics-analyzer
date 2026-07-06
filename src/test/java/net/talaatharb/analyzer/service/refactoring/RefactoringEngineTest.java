@@ -604,4 +604,151 @@ class RefactoringEngineTest {
         RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
         assertFalse(result.isModified());
     }
+
+    // ---- ExtractConstant ----
+
+    @Test
+    void shouldCreateExtractConstantActionFromMagicNumberIssue(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    int timeout = 30;",
+                "}"
+        ));
+
+        StaticIssue issue = new StaticIssue(
+                file, 2,
+                "[MagicNumber] '30' is a magic number.",
+                "Warning",
+                "maintainability", "MagicNumber", "Checkstyle Analyzer (Maven)",
+                0.85, "review", "Extract as constant.", "small",
+                List.of("checkstyle"), "New"
+        );
+
+        Optional<RefactoringAction> action = RefactoringActionFactory.fromIssue(issue);
+        assertTrue(action.isPresent());
+        assertEquals(RefactoringActionType.EXTRACT_CONSTANT, action.get().getType());
+        assertEquals("30", action.get().getAttributes().get("literal"));
+    }
+
+    @Test
+    void shouldExtractConstantAndReplaceUsage(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    int timeout = 30;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 2,
+                Map.of("literal", "30", "constantName", "DEFAULT_TIMEOUT")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("private static final int DEFAULT_TIMEOUT = 30;"));
+        assertTrue(updated.contains("int timeout = DEFAULT_TIMEOUT;"));
+    }
+
+    @Test
+    void shouldReturnNoChangeForUnsupportedLiteral(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    Object x = new Object();",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 2,
+                Map.of("literal", "new Object()", "constantName", "OBJ")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    @Test
+    void shouldAutoSuffixConstantNameWhenNameAlreadyExists(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    private static final int DEFAULT_TIMEOUT = 20;",
+                "    int timeout = 30;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 3,
+                Map.of("literal", "30", "constantName", "DEFAULT_TIMEOUT")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("private static final int DEFAULT_TIMEOUT_2 = 30;"));
+        assertTrue(updated.contains("int timeout = DEFAULT_TIMEOUT_2;"));
+    }
+
+    @Test
+    void shouldReplaceAllOccurrencesWhenRequested(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    int a = 30;",
+                "    int b = 30;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 2,
+                Map.of("literal", "30", "constantName", "DEFAULT_TIMEOUT", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("int a = DEFAULT_TIMEOUT;"));
+        assertTrue(updated.contains("int b = DEFAULT_TIMEOUT;"));
+    }
+
+    @Test
+    void shouldSkipCommentsAndAnnotationsDuringReplacement(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    @SuppressWarnings(\"30\")",
+                "    // 30 should remain in comment",
+                "    int a = 30;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_CONSTANT,
+                file, 4,
+                Map.of("literal", "30", "constantName", "DEFAULT_TIMEOUT", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("@SuppressWarnings(\"30\")"));
+        assertTrue(updated.contains("// 30 should remain in comment"));
+        assertTrue(updated.contains("int a = DEFAULT_TIMEOUT;"));
+    }
 }
