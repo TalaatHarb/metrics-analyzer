@@ -774,4 +774,65 @@ class RefactoringEngineTest {
         assertTrue(result.isModified());
         assertTrue(updated.contains("int a = DEFAULT_TIMEOUT; // keep 30 in comment"));
     }
+
+    // ---- ExtractMethod ----
+
+    @Test
+    void shouldExtractMethodFromSelectedStatements(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process() {",
+                "        int value = 10;",
+                "        int doubled = value * 2;",
+                "        System.out.println(doubled);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_METHOD,
+                file,
+                4,
+                Map.of("startLine", "4", "endLine", "5", "methodName", "printDouble")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("printDouble(value);"));
+        assertTrue(updated.contains("private void printDouble(int value)"));
+        assertTrue(updated.contains("int doubled = value * 2;"));
+        assertTrue(updated.contains("System.out.println(doubled);"));
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenExtractedVariableUsedAfterSelection(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process() {",
+                "        int value = 10;",
+                "        int doubled = value * 2;",
+                "        int x = doubled + 1;",
+                "        System.out.println(x);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.EXTRACT_METHOD,
+                file,
+                4,
+                Map.of("startLine", "4", "endLine", "4", "methodName", "calcDouble")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+
+        assertFalse(result.isModified());
+        assertTrue(result.getMessage().contains("used later"));
+    }
 }

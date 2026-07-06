@@ -42,12 +42,14 @@ import javax.swing.SwingUtilities;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class MetricsAnalyzerApp extends Application {
     private static final String GRAPH_CLASS_LEVEL = "Class/File Coupling";
@@ -77,6 +79,7 @@ public class MetricsAnalyzerApp extends Application {
 
     private Path selectedProjectPath;
     private AnalysisResult latestResult;
+    private HealthSnapshot previousHealthSnapshot;
 
     @Override
     public void start(Stage stage) {
@@ -310,10 +313,12 @@ public class MetricsAnalyzerApp extends Application {
             AnalysisResult result = task.getValue();
             latestResult = result;
             rows.setAll(result.getClassMetrics());
-            summaryArea.setText(result.buildSummary());
+            summaryArea.setText(result.buildSummary() + System.lineSeparator() + System.lineSeparator()
+                    + buildProjectHealthDashboard(result));
             statusLabel.setText("Completed: " + result.getClassCount() + " classes analyzed");
             analyzeButton.setDisable(false);
             renderCouplingGraph();
+            previousHealthSnapshot = HealthSnapshot.from(result);
         });
 
         task.setOnFailed(event -> {
@@ -480,6 +485,91 @@ public class MetricsAnalyzerApp extends Application {
 
     private static double round(double value) {
         return Double.parseDouble(String.format(Locale.US, "%.2f", value));
+    }
+
+    private String buildProjectHealthDashboard(AnalysisResult result) {
+        List<ClassMetrics> metrics = result.getClassMetrics();
+        if (metrics.isEmpty()) {
+            return "Project Health Dashboard\nNo class metrics available.";
+        }
+
+        long highDebt = metrics.stream().filter(cm -> debtScore(cm) > 10.0).count();
+        long mediumDebt = metrics.stream().filter(cm -> debtScore(cm) > 5.0 && debtScore(cm) <= 10.0).count();
+        long lowDebt = metrics.stream().filter(cm -> debtScore(cm) > 0.0 && debtScore(cm) <= 5.0).count();
+        double avgDebt = metrics.stream().mapToDouble(MetricsAnalyzerApp::debtScore).average().orElse(0.0);
+        double maxDebt = metrics.stream().mapToDouble(MetricsAnalyzerApp::debtScore).max().orElse(0.0);
+
+        List<ClassMetrics> hotspots = metrics.stream()
+                .sorted(Comparator.comparingDouble(MetricsAnalyzerApp::debtScore).reversed())
+                .limit(5)
+                .collect(Collectors.toList());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("Project Health Dashboard").append(System.lineSeparator());
+        sb.append("Debt Categories: ")
+                .append("High=").append(highDebt)
+                .append(", Medium=").append(mediumDebt)
+                .append(", Low=").append(lowDebt)
+                .append(System.lineSeparator());
+        sb.append("Debt Score: avg=").append(format2(avgDebt))
+                .append(", max=").append(format2(maxDebt))
+                .append(System.lineSeparator());
+        sb.append("Trend: ").append(buildTrendSummary(avgDebt, highDebt)).append(System.lineSeparator());
+        sb.append("Top Hotspots:").append(System.lineSeparator());
+        for (int i = 0; i < hotspots.size(); i++) {
+            ClassMetrics cm = hotspots.get(i);
+            sb.append(i + 1).append(". ")
+                    .append(cm.getClassName())
+                    .append("  debt=").append(format2(debtScore(cm)))
+                    .append(", CC=").append(cm.getCyclomaticComplexity())
+                    .append(", MI=").append(format2(cm.getMaintainabilityIndex()))
+                    .append(", Coupling=").append(cm.getEfferentCoupling())
+                    .append(System.lineSeparator());
+        }
+        return sb.toString().trim();
+    }
+
+    private String buildTrendSummary(double avgDebt, long highDebtCount) {
+        if (previousHealthSnapshot == null) {
+            return "Baseline established (run analysis again to see trend).";
+        }
+
+        double debtDelta = avgDebt - previousHealthSnapshot.averageDebt;
+        long highDebtDelta = highDebtCount - previousHealthSnapshot.highDebtCount;
+        String debtDirection = debtDelta > 0.01 ? "up" : debtDelta < -0.01 ? "down" : "stable";
+        String highDirection = highDebtDelta > 0 ? "up" : highDebtDelta < 0 ? "down" : "stable";
+
+        return "Avg debt " + debtDirection + " (" + signedFormat(debtDelta) + "), "
+                + "high-debt hotspots " + highDirection + " (" + signedLong(highDebtDelta) + ").";
+    }
+
+    private String format2(double value) {
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private String signedFormat(double value) {
+        return String.format(Locale.US, "%+.2f", value);
+    }
+
+    private String signedLong(long value) {
+        return value >= 0 ? "+" + value : Long.toString(value);
+    }
+
+    private static final class HealthSnapshot {
+        private final double averageDebt;
+        private final long highDebtCount;
+
+        private HealthSnapshot(double averageDebt, long highDebtCount) {
+            this.averageDebt = averageDebt;
+            this.highDebtCount = highDebtCount;
+        }
+
+        private static HealthSnapshot from(AnalysisResult result) {
+            List<ClassMetrics> classes = result.getClassMetrics();
+            double avgDebt = classes.stream().mapToDouble(MetricsAnalyzerApp::debtScore).average().orElse(0.0);
+            long highDebt = classes.stream().filter(cm -> debtScore(cm) > 10.0).count();
+            return new HealthSnapshot(avgDebt, highDebt);
+        }
     }
 
     public static void main(String[] args) {

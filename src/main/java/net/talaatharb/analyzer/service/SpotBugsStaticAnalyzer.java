@@ -11,12 +11,46 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
+    private static final String TOOL_NAME = "SpotBugs Analyzer (Maven)";
+    private static final Map<String, RuleMeta> KNOWN_RULE_META = Map.of(
+            "NP_NULL_ON_SOME_PATH", new RuleMeta("correctness", "review",
+                    "Add null-guard checks or validate the object before use.", "medium", List.of("null-safety", "spotbugs")),
+            "NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE", new RuleMeta("correctness", "review",
+                    "Check return value for null before dereference.", "medium", List.of("null-safety", "spotbugs")),
+            "DLS_DEAD_LOCAL_STORE", new RuleMeta("technical-debt", "safe",
+                    "Remove dead local assignment or use the assigned value.", "small", List.of("cleanup", "spotbugs")),
+            "URF_UNREAD_FIELD", new RuleMeta("technical-debt", "safe",
+                    "Remove unused field or wire it into behavior.", "small", List.of("cleanup", "spotbugs")),
+            "EI_EXPOSE_REP", new RuleMeta("security", "review",
+                    "Avoid exposing mutable internal state; return immutable copies.", "medium", List.of("encapsulation", "spotbugs")),
+            "EI_EXPOSE_REP2", new RuleMeta("security", "review",
+                    "Do not retain externally mutable references directly.", "medium", List.of("encapsulation", "spotbugs")),
+            "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE", new RuleMeta("security", "review",
+                    "Use parameterized queries to avoid SQL injection risk.", "large", List.of("security", "injection", "spotbugs"))
+    );
+    private static final Map<String, RuleMeta> KNOWN_CATEGORY_META = Map.of(
+            "SECURITY", new RuleMeta("security", "review",
+                    "Address security-sensitive pattern and validate exploitability.", "medium", List.of("security", "spotbugs")),
+            "MALICIOUS_CODE", new RuleMeta("security", "review",
+                    "Review potentially unsafe operations and reduce attack surface.", "medium", List.of("security", "spotbugs")),
+            "PERFORMANCE", new RuleMeta("performance", "review",
+                    "Optimize the expensive operation or remove unnecessary allocations.", "small", List.of("performance", "spotbugs")),
+            "STYLE", new RuleMeta("code-style", "safe",
+                    "Apply style/cleanup recommendation.", "small", List.of("style", "spotbugs")),
+            "BAD_PRACTICE", new RuleMeta("maintainability", "review",
+                    "Refactor bad practice into clearer and safer code.", "medium", List.of("maintainability", "spotbugs")),
+            "CORRECTNESS", new RuleMeta("correctness", "review",
+                    "Fix correctness issue to prevent runtime defects.", "medium", List.of("correctness", "spotbugs")),
+            "MT_CORRECTNESS", new RuleMeta("correctness", "review",
+                    "Fix thread-safety/concurrency correctness issue.", "large", List.of("concurrency", "spotbugs"))
+    );
 
     @Override
     public String getName() {
-        return "SpotBugs Analyzer (Maven)";
+        return TOOL_NAME;
     }
 
     @Override
@@ -101,7 +135,7 @@ public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
                         }
                     }
 
-                    issues.add(new StaticIssue(path, line, "[" + category + "] " + message, severity));
+                    issues.add(buildIssue(path, line, type, category, message, severity, priority));
                 }
 
                 if (issues.isEmpty()) {
@@ -130,5 +164,60 @@ public class SpotBugsStaticAnalyzer implements StaticAnalyzer {
     @Override
     public String toString() {
         return getName();
+    }
+
+    private StaticIssue buildIssue(
+            Path file,
+            int line,
+            String type,
+            String category,
+            String message,
+            String severity,
+            int priority
+    ) {
+        RuleMeta categoryMeta = category == null ? null : KNOWN_CATEGORY_META.get(category.toUpperCase());
+        RuleMeta ruleMeta = type == null ? null : KNOWN_RULE_META.get(type);
+        RuleMeta meta = ruleMeta != null ? ruleMeta : (categoryMeta != null ? categoryMeta : RuleMeta.UNKNOWN);
+        String categoryLabel = meta.category;
+        String ruleId = type == null ? "" : type;
+        double confidence = priority <= 1 ? 0.95 : priority == 2 ? 0.85 : 0.70;
+        return new StaticIssue(
+                file,
+                line,
+                "[" + ruleId + "] " + message,
+                severity,
+                categoryLabel,
+                ruleId,
+                TOOL_NAME,
+                confidence,
+                meta.fixability,
+                meta.suggestedFix,
+                meta.effort,
+                meta.tags,
+                "open"
+        );
+    }
+
+    private static final class RuleMeta {
+        static final RuleMeta UNKNOWN = new RuleMeta(
+                "general",
+                "none",
+                "No suggested fix available.",
+                "unknown",
+                List.of("spotbugs")
+        );
+        final String category;
+        final String fixability;
+        final String suggestedFix;
+        final String effort;
+        final List<String> tags;
+
+        RuleMeta(String category, String fixability, String suggestedFix, String effort, List<String> tags) {
+            this.category = category;
+            this.fixability = fixability;
+            this.suggestedFix = suggestedFix;
+            this.effort = effort;
+            this.tags = tags;
+        }
     }
 }

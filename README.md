@@ -76,6 +76,17 @@ You can also run **Fix All Safe Issues (Visible)** to apply safe quick fixes in 
 
 Automated quick fixes are now wired through a unified reducer-style refactoring pipeline (`RefactoringAction` + `ProjectRefactoringReducer` + `RefactoringEngine`), so new refactoring actions can be added without changing File Explorer UI logic.
 
+Refactoring operations in the code editor context menu now include:
+- **Rename Symbol in File**
+- **Extract Constant** (single or all occurrences)
+- **Extract Method from Selection** (AST-backed with Spoon)
+
+Compile error results in File Explorer now support multiline detail expansion and direct copy actions.
+
+SpotBugs findings now include richer issue metadata (category, confidence, fixability, effort, suggested fix, tags) similar to PMD/Checkstyle.
+
+The Metrics tab summary includes a **Project Health Dashboard** with debt categories, trend (vs previous run), and top debt hotspots.
+
 Some scanners require external tools to be installed and available on `PATH` (for example `infer` and `semgrep`).
 
 ## Screenshots

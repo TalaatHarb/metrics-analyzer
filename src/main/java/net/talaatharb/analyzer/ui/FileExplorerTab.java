@@ -44,10 +44,14 @@ import javafx.concurrent.Task;
 
 import javafx.scene.control.ContextMenu;
 import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.IndexRange;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.TableCell;
 import javafx.scene.control.TableRow;
 import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.Tooltip;
@@ -57,6 +61,7 @@ import javafx.scene.Node;
 import javafx.geometry.Pos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.fxmisc.richtext.model.TwoDimensional.Bias;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -445,7 +450,7 @@ public class FileExplorerTab {
         
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
             if (newVal != null) {
-                if (java.nio.file.Files.isRegularFile(newVal.getFile())) {
+                if (Files.isRegularFile(newVal.getFile())) {
                     loadFileContent(newVal.getFile());
                     codeArea.moveTo(Math.max(0, newVal.getLineNumber() - 1), 0);
                     codeArea.requestFollowCaret();
@@ -502,11 +507,24 @@ public class FileExplorerTab {
         detailsCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(toMultilineDetails(v.getValue().getDetails())));
         detailsCol.setCellFactory(tc -> new TableCell<>() {
             private final Label label = new Label();
+            private final Hyperlink toggle = new Hyperlink();
+            private final VBox container = new VBox(2);
             {
                 label.setWrapText(true);
+                toggle.setOnAction(e -> {
+                    CompileErrorRow rowItem = getTableRow() == null ? null : getTableRow().getItem();
+                    if (rowItem == null) {
+                        return;
+                    }
+                    rowItem.setDetailsExpanded(!rowItem.isDetailsExpanded());
+                    updateItem(getItem(), false);
+                });
+                container.getChildren().addAll(label, toggle);
                 setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
-                setGraphic(label);
+                setGraphic(container);
                 label.maxWidthProperty().bind(tc.widthProperty().subtract(12));
+                toggle.setVisible(false);
+                toggle.setManaged(false);
             }
 
             @Override
@@ -514,9 +532,19 @@ public class FileExplorerTab {
                 super.updateItem(item, empty);
                 if (empty || item == null || item.isBlank()) {
                     label.setText(null);
+                    toggle.setVisible(false);
+                    toggle.setManaged(false);
                     setTooltip(null);
                 } else {
-                    label.setText(item);
+                    CompileErrorRow rowItem = getTableRow() == null ? null : getTableRow().getItem();
+                    boolean expanded = rowItem != null && rowItem.isDetailsExpanded();
+                    boolean expandable = isExpandableDetails(item);
+                    label.setText(expanded || !expandable ? item : compactDetailsPreview(item));
+                    toggle.setVisible(expandable);
+                    toggle.setManaged(expandable);
+                    if (expandable) {
+                        toggle.setText(expanded ? "Show less" : "Show more");
+                    }
                     setTooltip(new Tooltip(item));
                 }
             }
@@ -561,6 +589,35 @@ public class FileExplorerTab {
         return details.replace(" | ", System.lineSeparator());
     }
 
+    private boolean isExpandableDetails(String details) {
+        if (details == null || details.isBlank()) {
+            return false;
+        }
+        String[] lines = details.split("\\R", -1);
+        return lines.length > 1 || details.length() > 120;
+    }
+
+    private String compactDetailsPreview(String details) {
+        if (details == null || details.isBlank()) {
+            return "";
+        }
+        String[] lines = details.split("\\R", -1);
+        if (lines.length <= 1 && details.length() <= 120) {
+            return details;
+        }
+        if (lines.length > 1) {
+            String first = lines[0];
+            String second = lines.length > 1 ? lines[1] : "";
+            int remaining = Math.max(0, lines.length - 2);
+            if (remaining == 0) {
+                return first + System.lineSeparator() + second;
+            }
+            return first + System.lineSeparator() + second + System.lineSeparator()
+                    + "... (" + remaining + " more line(s))";
+        }
+        return details.substring(0, 117) + "...";
+    }
+
     private void copyCompileErrorToClipboard(CompileErrorRow error) {
         if (error == null) {
             return;
@@ -600,6 +657,16 @@ public class FileExplorerTab {
         detailsArea.setPrefColumnCount(90);
         detailsArea.setPrefRowCount(16);
         alert.getDialogPane().setContent(detailsArea);
+        ButtonType copyBtn = new ButtonType("Copy", ButtonBar.ButtonData.LEFT);
+        ButtonType closeBtn = new ButtonType("Close", ButtonBar.ButtonData.OK_DONE);
+        alert.getButtonTypes().setAll(copyBtn, closeBtn);
+        Node copyButtonNode = alert.getDialogPane().lookupButton(copyBtn);
+        if (copyButtonNode != null) {
+            copyButtonNode.addEventFilter(javafx.event.ActionEvent.ACTION, evt -> {
+                copyCompileErrorToClipboard(error);
+                evt.consume();
+            });
+        }
         alert.showAndWait();
     }
     
@@ -941,10 +1008,13 @@ public class FileExplorerTab {
         extractConstantItem.setOnAction(e -> handleExtractConstant(area, false));
         MenuItem extractConstantAllItem = new MenuItem("Extract Constant (All Occurrences)…");
         extractConstantAllItem.setOnAction(e -> handleExtractConstant(area, true));
-        ContextMenu codeAreaMenu = new ContextMenu(renameItem, extractConstantItem, extractConstantAllItem);
+        MenuItem extractMethodItem = new MenuItem("Extract Method from Selection…");
+        extractMethodItem.setOnAction(e -> handleExtractMethod(area));
+        ContextMenu codeAreaMenu = new ContextMenu(renameItem, extractConstantItem, extractConstantAllItem, extractMethodItem);
         codeAreaMenu.setOnShowing(e -> {
             String word = getWordAtCaret(area);
             String literal = getLiteralAtCaretOrSelection(area);
+            int[] selectedRange = getSelectedLineRange(area);
             renameItem.setDisable(word == null || word.isBlank() || currentFilePath == null);
             renameItem.setText(word != null && !word.isBlank()
                     ? "Rename '" + word + "' in File…"
@@ -957,6 +1027,10 @@ public class FileExplorerTab {
             extractConstantAllItem.setText(literal != null && !literal.isBlank()
                     ? "Extract Constant (All) from '" + literal + "'…"
                     : "Extract Constant (All Occurrences)…");
+            extractMethodItem.setDisable(selectedRange == null || currentFilePath == null);
+            extractMethodItem.setText(selectedRange == null
+                    ? "Extract Method from Selection…"
+                    : "Extract Method (lines " + selectedRange[0] + "-" + selectedRange[1] + ")…");
         });
         area.setContextMenu(codeAreaMenu);
 
@@ -1091,6 +1165,75 @@ public class FileExplorerTab {
                 LOGGER.error("Extract constant failed", ex);
             }
         });
+    }
+
+    private void handleExtractMethod(CodeArea area) {
+        if (currentFilePath == null) {
+            return;
+        }
+        int[] selectedRange = getSelectedLineRange(area);
+        if (selectedRange == null) {
+            return;
+        }
+
+        TextInputDialog dialog = new TextInputDialog("extractedMethod");
+        dialog.setTitle("Extract Method");
+        dialog.setHeaderText("Extract selected lines " + selectedRange[0] + "-" + selectedRange[1]);
+        dialog.setContentText("Method name:");
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(methodName -> {
+            if (methodName == null || methodName.isBlank()) {
+                return;
+            }
+            Map<String, String> attrs = new HashMap<>();
+            attrs.put("methodName", methodName.trim());
+            attrs.put("startLine", Integer.toString(selectedRange[0]));
+            attrs.put("endLine", Integer.toString(selectedRange[1]));
+
+            RefactoringAction action = new RefactoringAction(
+                    RefactoringActionType.EXTRACT_METHOD,
+                    currentFilePath.toAbsolutePath().normalize(),
+                    selectedRange[0],
+                    attrs
+            );
+            try {
+                RefactoringResult refResult = refactoringEngine.apply(
+                        new ProjectRefactoringState(rootPath != null ? rootPath : currentFilePath.getParent()),
+                        action
+                );
+                if (refResult.isModified()) {
+                    loadFileContent(currentFilePath);
+                    runCompileSafetyGate();
+                    LOGGER.info("Extract Method: {}", refResult.getMessage());
+                } else {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    alert.setTitle("Extract Method");
+                    alert.setHeaderText(null);
+                    alert.setContentText(refResult.getMessage());
+                    alert.showAndWait();
+                }
+            } catch (IOException ex) {
+                LOGGER.error("Extract method failed", ex);
+            }
+        });
+    }
+
+    private int[] getSelectedLineRange(CodeArea area) {
+        if (area == null) {
+            return null;
+        }
+        IndexRange selection = area.getSelection();
+        if (selection == null || selection.getLength() <= 0) {
+            return null;
+        }
+        int startOffset = selection.getStart();
+        int endOffset = Math.max(selection.getStart(), selection.getEnd() - 1);
+        int startLine = area.offsetToPosition(startOffset, Bias.Forward).getMajor() + 1;
+        int endLine = area.offsetToPosition(endOffset, Bias.Backward).getMajor() + 1;
+        if (startLine <= 0 || endLine <= 0) {
+            return null;
+        }
+        return new int[] {Math.min(startLine, endLine), Math.max(startLine, endLine)};
     }
 
     private String getLiteralAtCaretOrSelection(CodeArea area) {
@@ -1794,6 +1937,7 @@ public class FileExplorerTab {
         private final int column;
         private final String message;
         private final String details;
+        private boolean detailsExpanded;
 
         private CompileErrorRow(Path file, int line, int column, String message, String details) {
             this.file = file;
@@ -1821,6 +1965,14 @@ public class FileExplorerTab {
 
         private String getDetails() {
             return details;
+        }
+
+        private boolean isDetailsExpanded() {
+            return detailsExpanded;
+        }
+
+        private void setDetailsExpanded(boolean detailsExpanded) {
+            this.detailsExpanded = detailsExpanded;
         }
 
         private String getDisplayFile(Path projectRoot) {

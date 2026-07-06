@@ -21,7 +21,8 @@ public class RefactoringEngine {
                 new RenameSymbolRefactoringReducer(),
                 new RemoveStarImportRefactoringReducer(),
                 new RemoveUnnecessaryFullyQualifiedNameRefactoringReducer(),
-                new ExtractConstantRefactoringReducer()
+                new ExtractConstantRefactoringReducer(),
+                new ExtractMethodRefactoringReducer()
         ));
     }
 
