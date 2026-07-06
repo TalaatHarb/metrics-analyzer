@@ -1,0 +1,11 @@
+package net.talaatharb.analyzer.service.refactoring;
+
+public enum RefactoringActionType {
+    NORMALIZE_TODO_FIXME_MARKER,
+    REMOVE_USELESS_PARENTHESES,
+    REMOVE_UNNECESSARY_IMPORT,
+    REMOVE_UNNECESSARY_RETURN,
+    RENAME_SYMBOL,
+    REMOVE_STAR_IMPORT,
+    REMOVE_UNNECESSARY_FULLY_QUALIFIED_NAME
+}

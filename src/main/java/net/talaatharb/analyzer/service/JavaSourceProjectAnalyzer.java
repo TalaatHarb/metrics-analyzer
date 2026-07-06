@@ -293,7 +293,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
                 - 5.2 * Math.log(Math.max(halsteadVolume, 1.0))
                 - 0.23 * complexity
                 - 16.2 * Math.log(Math.max(loc, 1));
-        double normalized = (raw * 100.0) / 171.0;
+        double normalized = raw * 100.0 / 171.0;
         return Math.max(0.0, Math.min(100.0, normalized));
     }
 

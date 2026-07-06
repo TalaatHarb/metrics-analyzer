@@ -24,12 +24,6 @@ public class InferStaticAnalyzer implements StaticAnalyzer {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
 
-        Path servicePath = ServicePackageStaticAnalyzerSupport.getServicePackagePath(rootPath);
-        if (!Files.isDirectory(servicePath)) {
-            issues.add(new StaticIssue(rootPath, 0, "Service package not found at " + servicePath, "Warning"));
-            return issues;
-        }
-
         ServicePackageStaticAnalyzerSupport.ProcessExecution execution = null;
         try {
             execution = ServicePackageStaticAnalyzerSupport.runCommand(
@@ -71,9 +65,6 @@ public class InferStaticAnalyzer implements StaticAnalyzer {
                 JsonObject obj = finding.getAsJsonObject();
 
                 String file = getString(obj, "file");
-                if (!ServicePackageStaticAnalyzerSupport.isServicePackageFile(file)) {
-                    continue;
-                }
 
                 int line = obj.has("line") && obj.get("line").isJsonPrimitive()
                     ? obj.get("line").getAsInt()
@@ -81,9 +72,10 @@ public class InferStaticAnalyzer implements StaticAnalyzer {
                 String bugType = getString(obj, "bug_type");
                 String qualifier = getString(obj, "qualifier");
                 String severity = mapSeverity(getString(obj, "severity"));
+                Path resolvedPath = ServicePackageStaticAnalyzerSupport.resolveSourcePath(rootPath, file);
 
                 issues.add(new StaticIssue(
-                    Path.of(file),
+                    resolvedPath,
                     line,
                     "[Infer][" + bugType + "] " + qualifier,
                     severity
@@ -91,7 +83,7 @@ public class InferStaticAnalyzer implements StaticAnalyzer {
             }
 
             if (issues.isEmpty()) {
-                issues.add(new StaticIssue(servicePath, 0, "No Infer findings in the service package.", "Info"));
+                issues.add(new StaticIssue(rootPath, 0, "No Infer findings in the analyzed project.", "Info"));
             }
         } catch (Exception e) {
             issues.add(new StaticIssue(rootPath, 0, "Failed to run Infer scan: " + e.getMessage(), "Error"));

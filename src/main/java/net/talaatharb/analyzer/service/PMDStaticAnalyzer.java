@@ -11,8 +11,54 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class PMDStaticAnalyzer implements StaticAnalyzer {
+
+    private static final Map<String, RuleMeta> KNOWN_RULE_META = Map.of(
+            "UselessParentheses", new RuleMeta(
+                    "code-style",
+                    "safe",
+                    "Remove useless parentheses around the expression.",
+                    "small"
+            ),
+            "UnnecessaryReturn", new RuleMeta(
+                    "code-style",
+                    "safe",
+                    "Remove the unnecessary return statement at the end of the method.",
+                    "small"
+            ),
+            "UnnecessaryImport", new RuleMeta(
+                    "code-style",
+                    "safe",
+                    "Remove the unused import statement.",
+                    "small"
+            ),
+            "UnnecessaryFullyQualifiedName", new RuleMeta(
+                    "code-style",
+                    "safe",
+                    "Replace the fully qualified type reference with the simple class name when already in scope.",
+                    "small"
+            ),
+            "UnusedImports", new RuleMeta(
+                    "code-style",
+                    "safe",
+                    "Remove the unused import statement.",
+                    "small"
+            ),
+            "EmptyCatchBlock", new RuleMeta(
+                    "error-handling",
+                    "review",
+                    "Handle the caught exception explicitly or rethrow with context.",
+                    "medium"
+            ),
+            "SystemPrintln", new RuleMeta(
+                    "technical-debt",
+                    "review",
+                    "Replace System.out/err with a proper logger.",
+                    "small"
+            )
+    );
 
     @Override
     public String getName() {
@@ -34,12 +80,10 @@ public class PMDStaticAnalyzer implements StaticAnalyzer {
             );
             pb.directory(rootPath.toFile());
             
-            // Redirect output to a temp file to avoid buffer blocking and allow inspecting errors
             File tempLog = File.createTempFile("pmd-maven-log", ".txt");
             pb.redirectOutput(tempLog);
             pb.redirectError(tempLog);
             
-            // Run PMD
             Process process = pb.start();
             int exitCode = process.waitFor();
             
@@ -63,9 +107,24 @@ public class PMDStaticAnalyzer implements StaticAnalyzer {
                         String rule = violation.getAttribute("rule");
                         String description = violation.getTextContent().trim();
                         int priority = Integer.parseInt(violation.getAttribute("priority"));
-                        
-                        String severity = priority <= 2 ? "Error" : (priority <= 4 ? "Warning" : "Info");
-                        issues.add(new StaticIssue(path, line, "[" + rule + "] " + description, severity));
+                        String severity = priority <= 2 ? "Error" : priority <= 4 ? "Warning" : "Info";
+
+                        RuleMeta meta = KNOWN_RULE_META.getOrDefault(rule, RuleMeta.UNKNOWN);
+                        issues.add(new StaticIssue(
+                                path,
+                                line,
+                                "[" + rule + "] " + description,
+                                severity,
+                                meta.category,
+                                rule,
+                                getName(),
+                                0.8,
+                                meta.fixability,
+                                meta.suggestedFix,
+                                meta.effort,
+                                List.of("pmd"),
+                                "open"
+                        ));
                     }
                 }
                 
@@ -95,5 +154,21 @@ public class PMDStaticAnalyzer implements StaticAnalyzer {
     @Override
     public String toString() {
         return getName();
+    }
+
+    private static final class RuleMeta {
+        static final RuleMeta UNKNOWN = new RuleMeta("general", "none", "", "unknown");
+
+        final String category;
+        final String fixability;
+        final String suggestedFix;
+        final String effort;
+
+        RuleMeta(String category, String fixability, String suggestedFix, String effort) {
+            this.category = category;
+            this.fixability = fixability;
+            this.suggestedFix = suggestedFix;
+            this.effort = effort;
+        }
     }
 }

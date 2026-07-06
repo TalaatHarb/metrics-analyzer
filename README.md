@@ -53,13 +53,28 @@ Supported report sources:
 
 ## Static Analysis Scanners (File Explorer)
 
-The static analysis selector in **File Explorer** now includes additional scanners focused on Java code under `src/main/java/net/talaatharb/analyzer/service`:
+The static analysis selector in **File Explorer** includes additional scanners for project-wide analysis:
 
 - FindBugs-compatible scan (via SpotBugs engine)
 - Find Security Bugs (FindSecBugs plugin)
 - Infer
 - SAST (Semgrep)
 - jQAssistant
+
+The File Explorer code area now supports direct editing and saving via **Operations → Save Current File**.
+
+Basic Analyzer findings now include debt-oriented metadata and an initial **Quick Fix** action (for TODO/FIXME markers) from the Problems table context menu.
+
+You can now set a per-analyzer baseline from current scan results (**Operations → Set Baseline From Current Results**) and toggle **Show New Issues Only** to focus on newly introduced debt.
+
+Static scanning now supports explicit scope selection in File Explorer:
+- **Project**
+- **Module/Folder** (based on the selected tree item)
+- **Current File**
+
+You can also run **Fix All Safe Issues (Visible)** to apply safe quick fixes in bulk for the currently visible problem list.
+
+Automated quick fixes are now wired through a unified reducer-style refactoring pipeline (`RefactoringAction` + `ProjectRefactoringReducer` + `RefactoringEngine`), so new refactoring actions can be added without changing File Explorer UI logic.
 
 Some scanners require external tools to be installed and available on `PATH` (for example `infer` and `semgrep`).
 

@@ -2,7 +2,6 @@ package net.talaatharb.analyzer.service;
 
 import net.talaatharb.analyzer.model.StaticIssue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,12 +18,6 @@ public class JQAssistantStaticAnalyzer implements StaticAnalyzer {
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
-
-        Path servicePath = ServicePackageStaticAnalyzerSupport.getServicePackagePath(rootPath);
-        if (!Files.isDirectory(servicePath)) {
-            issues.add(new StaticIssue(rootPath, 0, "Service package not found at " + servicePath, "Warning"));
-            return issues;
-        }
 
         ServicePackageStaticAnalyzerSupport.ProcessExecution execution = null;
         try {
@@ -44,9 +37,9 @@ public class JQAssistantStaticAnalyzer implements StaticAnalyzer {
             }
 
             issues.add(new StaticIssue(
-                servicePath,
+                rootPath,
                 0,
-                "jQAssistant scan completed for the project. Add jQAssistant rules to produce service-package-specific violations.",
+                "jQAssistant scan completed for the project. Add jQAssistant rules to produce actionable findings.",
                 "Info"
             ));
         } catch (Exception e) {

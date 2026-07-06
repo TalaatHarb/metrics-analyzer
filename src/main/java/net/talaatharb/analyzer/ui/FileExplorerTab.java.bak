@@ -301,7 +301,7 @@ public class FileExplorerTab {
                 buildStatusLabel,
                 coverageStatusLabel
         );
-        controls.setAlignment(Pos.CENTER_LEFT);
+        controls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
         Label compileErrorsHeader = new Label("Compile Errors");
         compileErrorsHeader.setStyle("-fx-font-weight: bold;");

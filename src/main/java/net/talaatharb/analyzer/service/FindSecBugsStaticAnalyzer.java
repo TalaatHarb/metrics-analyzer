@@ -7,8 +7,8 @@ import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,12 +24,6 @@ public class FindSecBugsStaticAnalyzer implements StaticAnalyzer {
     public List<StaticIssue> analyzeProject(Path rootPath) {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
-
-        Path servicePath = ServicePackageStaticAnalyzerSupport.getServicePackagePath(rootPath);
-        if (!Files.isDirectory(servicePath)) {
-            issues.add(new StaticIssue(rootPath, 0, "Service package not found at " + servicePath, "Warning"));
-            return issues;
-        }
 
         ServicePackageStaticAnalyzerSupport.ProcessExecution execution = null;
         try {
@@ -73,15 +67,13 @@ public class FindSecBugsStaticAnalyzer implements StaticAnalyzer {
                     Element sourceLine = (Element) sourceLineList.item(j);
                     String pathText = sourceLine.getAttribute("sourcepath");
                     if (!pathText.isEmpty()) {
-                        Path candidate = rootPath.resolve("src").resolve("main").resolve("java").resolve(pathText);
-                        if (ServicePackageStaticAnalyzerSupport.isServicePackageFile(candidate)) {
-                            sourcePath = candidate;
-                            String startLine = sourceLine.getAttribute("start");
-                            if (!startLine.isEmpty()) {
-                                line = Integer.parseInt(startLine);
-                            }
-                            break;
+                        Path candidate = ServicePackageStaticAnalyzerSupport.resolveSourcePath(rootPath, pathText);
+                        sourcePath = candidate;
+                        String startLine = sourceLine.getAttribute("start");
+                        if (!startLine.isEmpty()) {
+                            line = Integer.parseInt(startLine);
                         }
+                        break;
                     }
                 }
                 if (sourcePath == null) {
@@ -104,7 +96,7 @@ public class FindSecBugsStaticAnalyzer implements StaticAnalyzer {
             }
 
             if (issues.isEmpty()) {
-                issues.add(new StaticIssue(servicePath, 0, "No FindSecBugs findings in the service package.", "Info"));
+                issues.add(new StaticIssue(rootPath, 0, "No FindSecBugs findings in the analyzed project.", "Info"));
             }
         } catch (Exception e) {
             issues.add(new StaticIssue(rootPath, 0, "Failed to run FindSecBugs scan: " + e.getMessage(), "Error"));

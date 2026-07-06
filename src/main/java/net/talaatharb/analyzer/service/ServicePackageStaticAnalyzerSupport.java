@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 
 final class ServicePackageStaticAnalyzerSupport {
@@ -32,6 +31,34 @@ final class ServicePackageStaticAnalyzerSupport {
 
     static String normalizePath(String path) {
         return path == null ? "" : path.replace('\\', '/');
+    }
+
+    static Path resolveSourcePath(Path rootPath, String sourcePath) {
+        if (sourcePath == null || sourcePath.isBlank()) {
+            return rootPath;
+        }
+
+        Path rawPath = Path.of(sourcePath);
+        if (rawPath.isAbsolute() && Files.isRegularFile(rawPath)) {
+            return rawPath.toAbsolutePath().normalize();
+        }
+
+        Path mainPath = rootPath.resolve("src").resolve("main").resolve("java").resolve(sourcePath);
+        if (Files.isRegularFile(mainPath)) {
+            return mainPath.toAbsolutePath().normalize();
+        }
+
+        Path testPath = rootPath.resolve("src").resolve("test").resolve("java").resolve(sourcePath);
+        if (Files.isRegularFile(testPath)) {
+            return testPath.toAbsolutePath().normalize();
+        }
+
+        Path direct = rootPath.resolve(sourcePath);
+        if (Files.isRegularFile(direct)) {
+            return direct.toAbsolutePath().normalize();
+        }
+
+        return direct.toAbsolutePath().normalize();
     }
 
     static ProcessExecution runCommand(Path workingDirectory, String logPrefix, List<String> command)

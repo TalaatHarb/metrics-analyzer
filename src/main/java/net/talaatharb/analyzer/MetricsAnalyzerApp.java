@@ -27,8 +27,10 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Tab;
 import javafx.scene.control.TabPane;
 import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -226,8 +228,58 @@ public class MetricsAnalyzerApp extends Application {
         TableColumn<ClassMetrics, Number> miCol = new TableColumn<>("Maintainability");
         miCol.setCellValueFactory(v -> new ReadOnlyObjectWrapper<>(round(v.getValue().getMaintainabilityIndex())));
 
-        tv.getColumns().addAll(classCol, pkgCol, locCol, methodCol, fieldCol, couplingCol, lcomCol, ccCol, wmcCol, rfcCol, miCol);
+        TableColumn<ClassMetrics, Number> debtCol = new TableColumn<>("Debt Score");
+        debtCol.setCellValueFactory(v -> new ReadOnlyObjectWrapper<>(round(debtScore(v.getValue()))));
+        debtCol.setSortType(TableColumn.SortType.DESCENDING);
+        Tooltip debtTip = new Tooltip(
+                "Debt Score = CC × (1 − MI/100) × (1 + Coupling/10)\n"
+                + "Red > 10 (high), Orange > 5 (medium), Green ≤ 5 (low)");
+        Label debtHeader = new Label("Debt Score");
+        debtHeader.setTooltip(debtTip);
+        debtCol.setGraphic(debtHeader);
+        debtCol.setText("");
+
+        tv.getColumns().addAll(classCol, pkgCol, locCol, methodCol, fieldCol,
+                couplingCol, lcomCol, ccCol, wmcCol, rfcCol, miCol, debtCol);
+
+        // Color rows by debt score tier
+        tv.setRowFactory(t -> {
+            TableRow<ClassMetrics> row = new TableRow<>();
+            row.itemProperty().addListener((obs, old, item) -> {
+                if (item == null) {
+                    row.setStyle("");
+                } else {
+                    double score = debtScore(item);
+                    if (score > 10.0) {
+                        row.setStyle("-fx-background-color: #fee2e2;");  // red — high debt
+                    } else if (score > 5.0) {
+                        row.setStyle("-fx-background-color: #fef3c7;");  // amber — medium debt
+                    } else if (score > 0.0) {
+                        row.setStyle("-fx-background-color: #dcfce7;");  // green — low debt
+                    } else {
+                        row.setStyle("");
+                    }
+                }
+            });
+            return row;
+        });
+
+        // Default: sort by debt score descending (worst hotspots first)
+        tv.getSortOrder().add(debtCol);
+
         return tv;
+    }
+
+    /**
+     * Composite debt score: CC drives complexity load, MI penalizes low maintainability,
+     * and efferent coupling acts as a multiplier.
+     * Formula: CC × (1 − MI/100) × (1 + coupling/10)
+     */
+    private static double debtScore(ClassMetrics cm) {
+        double cc = cm.getCyclomaticComplexity();
+        double mi = Math.min(100.0, Math.max(0.0, cm.getMaintainabilityIndex()));
+        double coupling = cm.getEfferentCoupling();
+        return cc * (1.0 - mi / 100.0) * (1.0 + coupling / 10.0);
     }
 
     private void runAnalysis(Button analyzeButton) {

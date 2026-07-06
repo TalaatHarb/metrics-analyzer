@@ -6,7 +6,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import net.talaatharb.analyzer.model.StaticIssue;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -24,12 +23,6 @@ public class SemgrepSastStaticAnalyzer implements StaticAnalyzer {
         List<StaticIssue> issues = new ArrayList<>();
         if (rootPath == null) return issues;
 
-        Path servicePath = ServicePackageStaticAnalyzerSupport.getServicePackagePath(rootPath);
-        if (!Files.isDirectory(servicePath)) {
-            issues.add(new StaticIssue(rootPath, 0, "Service package not found at " + servicePath, "Warning"));
-            return issues;
-        }
-
         ServicePackageStaticAnalyzerSupport.ProcessExecution execution = null;
         try {
             execution = ServicePackageStaticAnalyzerSupport.runCommand(
@@ -42,11 +35,11 @@ public class SemgrepSastStaticAnalyzer implements StaticAnalyzer {
                     "auto",
                     "--quiet",
                     "--json",
-                    servicePath.toString()
+                    rootPath.toString()
                 )
             );
 
-            String output = Files.readString(execution.getLogFile());
+            String output = java.nio.file.Files.readString(execution.getLogFile());
             JsonElement root = JsonParser.parseString(output);
             if (!root.isJsonObject()) {
                 issues.add(new StaticIssue(rootPath, 0, "Semgrep output format is invalid.", "Error"));
@@ -62,9 +55,6 @@ public class SemgrepSastStaticAnalyzer implements StaticAnalyzer {
                 JsonObject result = resultElement.getAsJsonObject();
 
                 String filePath = getString(result, "path");
-                if (!ServicePackageStaticAnalyzerSupport.isServicePackageFile(filePath)) {
-                    continue;
-                }
 
                 int line = 0;
                 if (result.has("start") && result.get("start").isJsonObject()) {
@@ -80,12 +70,13 @@ public class SemgrepSastStaticAnalyzer implements StaticAnalyzer {
                 String checkId = getString(result, "check_id");
                 String message = getString(extra, "message");
                 String severity = mapSeverity(getString(extra, "severity"));
+                Path resolvedPath = ServicePackageStaticAnalyzerSupport.resolveSourcePath(rootPath, filePath);
 
-                issues.add(new StaticIssue(Path.of(filePath), line, "[Semgrep][" + checkId + "] " + message, severity));
+                issues.add(new StaticIssue(resolvedPath, line, "[Semgrep][" + checkId + "] " + message, severity));
             }
 
             if (issues.isEmpty()) {
-                issues.add(new StaticIssue(servicePath, 0, "No Semgrep SAST findings in the service package.", "Info"));
+                issues.add(new StaticIssue(rootPath, 0, "No Semgrep SAST findings in the analyzed project.", "Info"));
             }
         } catch (Exception e) {
             issues.add(new StaticIssue(
