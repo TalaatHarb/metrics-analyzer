@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class GitCommitsTab {
@@ -55,8 +56,17 @@ public class GitCommitsTab {
         });
         Button refreshButton = new Button("Refresh");
         refreshButton.setOnAction(e -> loadGitData());
+        Button diffButton = new Button("Diff");
+        diffButton.setOnAction(e -> showWorkingTreeDiff());
         
-        topControls.getChildren().addAll(currentBranchLabel, new Label("  |  Switch to:"), branchComboBox, switchButton, refreshButton);
+        topControls.getChildren().addAll(
+                currentBranchLabel,
+                new Label("  |  Switch to:"),
+                branchComboBox,
+                switchButton,
+                refreshButton,
+                diffButton
+        );
         content.setTop(topControls);
         
         // Commits List
@@ -111,7 +121,7 @@ public class GitCommitsTab {
         listContainer.getChildren().add(loadMoreButton);
         content.setCenter(listContainer);
         
-        Label instructions = new Label("Double-click a commit to view its diff.");
+        Label instructions = new Label("Double-click a commit to view its diff, or use Diff for working tree changes.");
         instructions.setPadding(new Insets(5, 0, 0, 0));
         content.setBottom(instructions);
         
@@ -252,34 +262,87 @@ public class GitCommitsTab {
             }
         };
         diffTask.setOnSucceeded(e -> {
-            Dialog<Void> dialog = new Dialog<>();
-            dialog.setTitle("Diff for commit " + commit.hash);
-            dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
-            dialog.setResizable(true);
-
-            CodeArea codeArea = new CodeArea();
-            codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
-            codeArea.setEditable(false);
-            codeArea.setWrapText(false);
-            codeArea.replaceText(diffTask.getValue());
-
-            String content = codeArea.getText();
-            var spans = GitDiffSyntaxHighlighter.computeHighlighting(content);
-            if (spans.length() == content.length()) {
-                codeArea.setStyleSpans(0, spans);
-            }
-
-            DialogPane pane = dialog.getDialogPane();
-            String cssResource = getClass().getResource("/syntax-highlighting.css").toExternalForm();
-            pane.getStylesheets().add(cssResource);
-            VirtualizedScrollPane<CodeArea> diffScrollPane = new VirtualizedScrollPane<>(codeArea);
-            diffScrollPane.setPrefSize(1200, 800);
-            pane.setMinSize(900, 600);
-            pane.setPrefSize(1200, 800);
-            pane.setContent(diffScrollPane);
-            dialog.showAndWait();
+            showDiffDialog("Diff for commit " + commit.hash, diffTask.getValue());
         });
         new Thread(diffTask).start();
+    }
+
+    private void showWorkingTreeDiff() {
+        if (projectPath == null || !isGitRepository(projectPath.toFile())) {
+            Alert alert = new Alert(Alert.AlertType.WARNING, "No Git repository selected.");
+            alert.showAndWait();
+            return;
+        }
+
+        Task<String> diffTask = new Task<>() {
+            @Override
+            protected String call() throws Exception {
+                File gitRoot = resolveGitRoot(projectPath.toFile());
+                String diff = runCommandAndCapture(Arrays.asList("git", "diff"), gitRoot);
+                if (diff.isBlank()) {
+                    return "No working tree changes.";
+                }
+                return diff;
+            }
+        };
+        diffTask.setOnSucceeded(e -> showDiffDialog("Working Tree Diff", diffTask.getValue()));
+        diffTask.setOnFailed(e -> {
+            Throwable ex = diffTask.getException();
+            Alert alert = new Alert(Alert.AlertType.ERROR,
+                    "Failed to load working tree diff." + (ex == null ? "" : "\n" + ex.getMessage()));
+            alert.showAndWait();
+        });
+        new Thread(diffTask).start();
+    }
+
+    private File resolveGitRoot(File workingDir) throws Exception {
+        String root = runCommandAndCapture(Arrays.asList("git", "rev-parse", "--show-toplevel"), workingDir).trim();
+        if (root.isBlank()) {
+            return workingDir;
+        }
+        return new File(root);
+    }
+
+    private String runCommandAndCapture(List<String> command, File workingDir) throws Exception {
+        Process p = new ProcessBuilder(command).directory(workingDir).start();
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                sb.append(line).append("\n");
+            }
+        }
+        p.waitFor();
+        return sb.toString();
+    }
+
+    private void showDiffDialog(String title, String diffContent) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        dialog.setResizable(true);
+
+        CodeArea codeArea = new CodeArea();
+        codeArea.setParagraphGraphicFactory(LineNumberFactory.get(codeArea));
+        codeArea.setEditable(false);
+        codeArea.setWrapText(false);
+        codeArea.replaceText(diffContent == null ? "" : diffContent);
+
+        String content = codeArea.getText();
+        var spans = GitDiffSyntaxHighlighter.computeHighlighting(content);
+        if (spans.length() == content.length()) {
+            codeArea.setStyleSpans(0, spans);
+        }
+
+        DialogPane pane = dialog.getDialogPane();
+        String cssResource = getClass().getResource("/syntax-highlighting.css").toExternalForm();
+        pane.getStylesheets().add(cssResource);
+        VirtualizedScrollPane<CodeArea> diffScrollPane = new VirtualizedScrollPane<>(codeArea);
+        diffScrollPane.setPrefSize(1200, 800);
+        pane.setMinSize(900, 600);
+        pane.setPrefSize(1200, 800);
+        pane.setContent(diffScrollPane);
+        dialog.showAndWait();
     }
     
     private static class CommitInfo {

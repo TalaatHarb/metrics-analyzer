@@ -1069,7 +1069,7 @@ public class FileExplorerTab {
         String selected = area.getSelectedText();
         String initialValue = (selected != null && !selected.isBlank() && !selected.contains(System.lineSeparator()))
                 ? selected
-                : lastSearchQuery == null ? "" : lastSearchQuery;
+                : (lastSearchQuery == null ? "" : lastSearchQuery);
         TextInputDialog dialog = new TextInputDialog(initialValue);
         dialog.setTitle("Find");
         dialog.setHeaderText("Search in current file");
