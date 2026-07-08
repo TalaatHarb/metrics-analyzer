@@ -141,7 +141,7 @@ public class InlineMethodRefactoringReducer implements ProjectRefactoringReducer
                 continue;
             }
             List<String> actualArgs = callSite.getArguments().stream()
-                    .map(arg -> arg.toString())
+                    .map(Object::toString)
                     .collect(Collectors.toList());
 
             String inlinedBody = buildInlinedBody(bodyStatements, paramNames, actualArgs);
@@ -228,7 +228,7 @@ public class InlineMethodRefactoringReducer implements ProjectRefactoringReducer
         }
         // For multi-statement bodies used in non-expression context, caller handles multi-line
         return bodyStatements.stream()
-                .map(s -> s.toString())
+                .map(Object::toString)
                 .collect(Collectors.joining(" "));
     }
 
