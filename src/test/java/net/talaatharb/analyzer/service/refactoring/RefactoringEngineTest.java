@@ -1000,4 +1000,356 @@ class RefactoringEngineTest {
         assertFalse(result.isModified());
         assertTrue(result.getMessage().contains("used later"));
     }
+
+    // ---- InlineConstant ----
+
+    @Test
+    void shouldInlineConstantAtSingleOccurrence(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    private static final int TIMEOUT = 30;",
+                "    int a = TIMEOUT;",
+                "    int b = TIMEOUT;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_CONSTANT,
+                file, 3,
+                Map.of("constantName", "TIMEOUT")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        // Only the hinted line (line 3) should be inlined
+        assertTrue(updated.contains("int a = 30;"));
+        // Line 4 (b) should remain as TIMEOUT and the declaration still present
+        assertTrue(updated.contains("int b = TIMEOUT;"));
+        assertTrue(updated.contains("private static final int TIMEOUT = 30;"));
+    }
+
+    @Test
+    void shouldInlineConstantAtAllOccurrencesAndRemoveDeclaration(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    private static final int TIMEOUT = 30;",
+                "    int a = TIMEOUT;",
+                "    int b = TIMEOUT;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_CONSTANT,
+                file, 3,
+                Map.of("constantName", "TIMEOUT", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("int a = 30;"));
+        assertTrue(updated.contains("int b = 30;"));
+        assertFalse(updated.contains("TIMEOUT"));
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenConstantDeclarationNotFound(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, "class Foo { int x = 1; }");
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_CONSTANT,
+                file, 1,
+                Map.of("constantName", "MISSING")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenNoUsagesOfConstantExist(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    private static final int UNUSED = 42;",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_CONSTANT,
+                file, 3,
+                Map.of("constantName", "UNUSED")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    @Test
+    void shouldInlineStringConstantAtAllOccurrences(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    private static final String PREFIX = \"hello\";",
+                "    String a = PREFIX;",
+                "    String b = PREFIX + \" world\";",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_CONSTANT,
+                file, 3,
+                Map.of("constantName", "PREFIX", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("String a = \"hello\";"));
+        assertTrue(updated.contains("String b = \"hello\" + \" world\";"));
+        assertFalse(updated.contains("PREFIX"));
+    }
+
+    // ---- InlineVariable ----
+
+    @Test
+    void shouldInlineVariableAtSingleOccurrence(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process() {",
+                "        int doubled = value * 2;",
+                "        System.out.println(doubled);",
+                "        log(doubled);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_VARIABLE,
+                file, 4,  // hinted to the println line
+                Map.of("variableName", "doubled")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("System.out.println(value * 2);"));
+        // Declaration and second usage should remain
+        assertTrue(updated.contains("int doubled = value * 2;"));
+        assertTrue(updated.contains("log(doubled);"));
+    }
+
+    @Test
+    void shouldInlineVariableAtAllOccurrencesAndRemoveDeclaration(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process() {",
+                "        int doubled = value * 2;",
+                "        System.out.println(doubled);",
+                "        log(doubled);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_VARIABLE,
+                file, 3,  // hint at declaration line
+                Map.of("variableName", "doubled", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("System.out.println(value * 2);"));
+        assertTrue(updated.contains("log(value * 2);"));
+        assertFalse(updated.contains("doubled"));
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenVariableDeclarationNotFound(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, "class Foo { void f() { } }");
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_VARIABLE,
+                file, 1,
+                Map.of("variableName", "missing")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenVariableHasNoUsages(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void f() {",
+                "        int unused = 5;",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_VARIABLE,
+                file, 3,
+                Map.of("variableName", "unused", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    // ---- InlineMethod ----
+
+    @Test
+    void shouldInlineVoidMethodAtSingleCallSite(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process(int value) {",
+                "        printValue(value);",
+                "        printValue(value);",
+                "    }",
+                "    private void printValue(int v) {",
+                "        System.out.println(v);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_METHOD,
+                file, 3,
+                Map.of("methodName", "printValue")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        // First call site inlined
+        assertTrue(updated.contains("System.out.println(value);"));
+        // Second call site still intact, method declaration still present
+        assertTrue(updated.contains("printValue(value);"));
+        assertTrue(updated.contains("private void printValue"));
+    }
+
+    @Test
+    void shouldInlineVoidMethodAtAllCallSitesAndRemoveDeclaration(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void process(int value) {",
+                "        printValue(value);",
+                "        printValue(value);",
+                "    }",
+                "    private void printValue(int v) {",
+                "        System.out.println(v);",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_METHOD,
+                file, 3,
+                Map.of("methodName", "printValue", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("System.out.println(value);"));
+        assertFalse(updated.contains("printValue("));
+        assertFalse(updated.contains("private void printValue"));
+    }
+
+    @Test
+    void shouldInlineNoArgVoidMethodAtAllCallSites(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void run() {",
+                "        setup();",
+                "    }",
+                "    private void setup() {",
+                "        System.out.println(\"setup\");",
+                "    }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_METHOD,
+                file, 3,
+                Map.of("methodName", "setup", "replaceAllOccurrences", "true")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        String updated = Files.readString(file);
+
+        assertTrue(result.isModified());
+        assertTrue(updated.contains("System.out.println(\"setup\");"));
+        assertFalse(updated.contains("setup()"));
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenMethodNotFound(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, "class Foo { void process() {} }");
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_METHOD,
+                file, 1,
+                Map.of("methodName", "missing")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
+
+    @Test
+    void shouldReturnNoChangeWhenMethodHasNoCallSites(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Foo.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Foo {",
+                "    void run() {}",
+                "    private void unused() { System.out.println(); }",
+                "}"
+        ));
+
+        RefactoringEngine engine = RefactoringEngine.createDefault();
+        RefactoringAction action = new RefactoringAction(
+                RefactoringActionType.INLINE_METHOD,
+                file, 1,
+                Map.of("methodName", "unused")
+        );
+
+        RefactoringResult result = engine.apply(new ProjectRefactoringState(tempDir), action);
+        assertFalse(result.isModified());
+    }
 }

@@ -24,7 +24,10 @@ public class RefactoringEngine {
                 new RemoveStarImportRefactoringReducer(),
                 new RemoveUnnecessaryFullyQualifiedNameRefactoringReducer(),
                 new ExtractConstantRefactoringReducer(),
-                new ExtractMethodRefactoringReducer()
+                new ExtractMethodRefactoringReducer(),
+                new InlineConstantRefactoringReducer(),
+                new InlineVariableRefactoringReducer(),
+                new InlineMethodRefactoringReducer()
         ));
     }
 
