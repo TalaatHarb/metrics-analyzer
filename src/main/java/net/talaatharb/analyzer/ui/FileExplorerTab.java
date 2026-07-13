@@ -356,7 +356,7 @@ public class FileExplorerTab {
     
     private TableView<StaticIssue> createProblemsTable() {
         TableView<StaticIssue> table = new TableView<>();
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         
         TableColumn<StaticIssue, String> fileCol = new TableColumn<>("File");
         fileCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getFile().getFileName().toString()));
@@ -429,7 +429,7 @@ public class FileExplorerTab {
             
             contextMenu.getItems().addAll(copyItem, detailsItem, quickFixItem);
             cell.emptyProperty().addListener((obs, wasEmpty, isNowEmpty) -> {
-                if (isNowEmpty) {
+                if (isNowEmpty.booleanValue()) {
                     cell.setContextMenu(null);
                 } else {
                     cell.setContextMenu(contextMenu);
@@ -452,7 +452,7 @@ public class FileExplorerTab {
         fixabilityCol.setPrefWidth(100);
         fixabilityCol.setMaxWidth(130);
         
-        table.getColumns().addAll(fileCol, lineCol, descCol, sevCol, statusCol, fixabilityCol);
+        table.getColumns().addAll(List.of(fileCol, lineCol, descCol, sevCol, statusCol, fixabilityCol));
         
         table.getSelectionModel().selectedItemProperty().addListener((obs, old, newVal) -> {
             if (newVal != null) {
@@ -469,7 +469,7 @@ public class FileExplorerTab {
 
     private TableView<CompileErrorRow> createCompileErrorsTable() {
         TableView<CompileErrorRow> table = new TableView<>(compileErrors);
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.setPlaceholder(new Label("No compile errors detected."));
 
         TableColumn<CompileErrorRow, String> fileCol = new TableColumn<>("File");
@@ -556,7 +556,7 @@ public class FileExplorerTab {
             }
         });
 
-        table.getColumns().addAll(fileCol, lineCol, colCol, msgCol, detailsCol);
+        table.getColumns().addAll(List.of(fileCol, lineCol, colCol, msgCol, detailsCol));
         table.setRowFactory(tv -> {
             TableRow<CompileErrorRow> row = new TableRow<>();
             MenuItem copyItem = new MenuItem("Copy Error");
@@ -570,7 +570,7 @@ public class FileExplorerTab {
                 copyItem.setDisable(disabled);
                 showDetailsItem.setDisable(disabled);
             });
-            row.emptyProperty().addListener((obs, wasEmpty, isEmpty) -> row.setContextMenu(isEmpty ? null : rowMenu));
+            row.emptyProperty().addListener((obs, wasEmpty, isEmpty) -> row.setContextMenu(isEmpty.booleanValue() ? null : rowMenu));
             return row;
         });
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, selected) -> {

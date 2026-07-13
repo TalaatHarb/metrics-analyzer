@@ -196,7 +196,7 @@ public class MetricsAnalyzerApp extends Application {
 
     private TableView<ClassMetrics> createTable() {
         TableView<ClassMetrics> tv = new TableView<>(rows);
-        tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        tv.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
 
         TableColumn<ClassMetrics, String> classCol = new TableColumn<>("Class");
         classCol.setCellValueFactory(v -> new ReadOnlyStringWrapper(v.getValue().getClassName()));
@@ -242,8 +242,8 @@ public class MetricsAnalyzerApp extends Application {
         debtCol.setGraphic(debtHeader);
         debtCol.setText("");
 
-        tv.getColumns().addAll(classCol, pkgCol, locCol, methodCol, fieldCol,
-                couplingCol, lcomCol, ccCol, wmcCol, rfcCol, miCol, debtCol);
+        tv.getColumns().addAll(List.of(classCol, pkgCol, locCol, methodCol, fieldCol,
+                couplingCol, lcomCol, ccCol, wmcCol, rfcCol, miCol, debtCol));
 
         // Color rows by debt score tier
         tv.setRowFactory(t -> {

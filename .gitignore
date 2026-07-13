@@ -26,3 +26,8 @@ replay_pid*
 # artifacts
 target/
 .metrics-analyzer
+
+# eclipse
+.classpath
+.project
+.settings

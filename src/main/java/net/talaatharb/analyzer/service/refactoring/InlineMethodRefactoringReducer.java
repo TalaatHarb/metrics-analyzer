@@ -100,13 +100,12 @@ public class InlineMethodRefactoringReducer implements ProjectRefactoringReducer
                 .collect(Collectors.toList());
 
         // Collect all call sites
-        @SuppressWarnings({"unchecked", "rawtypes"})
         List<CtInvocation<?>> callSites = new ArrayList<>();
-        for (CtInvocation inv : primaryType.getElements(new TypeFilter<>(CtInvocation.class))) {
+        for (CtInvocation<?> inv : primaryType.getElements(new TypeFilter<>(CtInvocation.class))) {
             if (inv.getExecutable() != null
                     && methodName.equals(inv.getExecutable().getSimpleName())
                     && inv.getArguments().size() == paramNames.size()) {
-                callSites.add((CtInvocation<?>) inv);
+                callSites.add(inv);
             }
         }
         callSites.sort(Comparator.comparingInt(inv -> inv.getPosition().getLine()));
