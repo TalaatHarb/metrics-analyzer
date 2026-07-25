@@ -65,9 +65,6 @@ final class StaticIssueCsvExporter {
     }
 
     private static String formatConfidence(StaticIssue issue) {
-        if (issue == null) {
-            return "";
-        }
         double confidence = issue.getConfidence();
         if (!Double.isFinite(confidence)) {
             return "";
@@ -76,7 +73,7 @@ final class StaticIssueCsvExporter {
     }
 
     private static String joinTags(StaticIssue issue) {
-        if (issue == null || issue.getTags() == null || issue.getTags().isEmpty()) {
+        if (issue.getTags() == null || issue.getTags().isEmpty()) {
             return "";
         }
         return String.join("; ", issue.getTags());

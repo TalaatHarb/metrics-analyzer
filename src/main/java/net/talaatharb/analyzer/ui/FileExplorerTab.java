@@ -893,7 +893,7 @@ public class FileExplorerTab {
                     new ArrayList<>(problemsTable.getItems()),
                     this::getIssueStatus
             );
-            showInformation("Export Complete", "Static issues exported to " + selectedFile.toPath() + ".");
+            showInformation("Export Complete", String.format("Static issues exported to %s.", selectedFile.toPath()));
         } catch (IOException ex) {
             LOGGER.error("Failed to export static issues to CSV", ex);
             showError("Export Failed", "Unable to export static issues to CSV.");
