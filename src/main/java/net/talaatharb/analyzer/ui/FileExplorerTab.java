@@ -31,6 +31,7 @@ import net.talaatharb.analyzer.service.FindSecBugsStaticAnalyzer;
 import net.talaatharb.analyzer.service.InferStaticAnalyzer;
 import net.talaatharb.analyzer.service.SemgrepSastStaticAnalyzer;
 import net.talaatharb.analyzer.service.JQAssistantStaticAnalyzer;
+import net.talaatharb.analyzer.service.EntryPointAnalyzer;
 import net.talaatharb.analyzer.service.refactoring.ProjectRefactoringState;
 import net.talaatharb.analyzer.service.refactoring.RefactoringAction;
 import net.talaatharb.analyzer.service.refactoring.RefactoringActionFactory;
@@ -184,7 +185,8 @@ public class FileExplorerTab {
             new FindSecBugsStaticAnalyzer(),
             new InferStaticAnalyzer(),
             new SemgrepSastStaticAnalyzer(),
-            new JQAssistantStaticAnalyzer()
+            new JQAssistantStaticAnalyzer(),
+            new EntryPointAnalyzer()
         );
         analyzerComboBox.getItems().addAll(allAnalyzers);
         analyzerComboBox.getSelectionModel().selectFirst();
