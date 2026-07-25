@@ -868,7 +868,7 @@ public class FileExplorerTab {
 
     private void exportVisibleIssuesAsCsv(TableView<StaticIssue> problemsTable) {
         if (problemsTable == null || problemsTable.getItems().isEmpty()) {
-            showWarning("No Issues to Export", "Run an analyzer first to export static issues.");
+            showWarning("No Issues to Export", "The current view has no issues to export.");
             return;
         }
 
@@ -893,7 +893,7 @@ public class FileExplorerTab {
                     new ArrayList<>(problemsTable.getItems()),
                     this::getIssueStatus
             );
-            showInformation("Export Complete", String.format("Static issues exported to %s.", selectedFile.toPath()));
+            showInformation("Export Complete", String.format("Static issues exported to %s.", selectedFile.getName()));
         } catch (IOException ex) {
             LOGGER.error("Failed to export static issues to CSV", ex);
             showError("Export Failed", "Unable to export static issues to CSV.");

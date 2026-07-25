@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -21,7 +22,8 @@ final class StaticIssueCsvExporter {
             List<StaticIssue> issues,
             Function<StaticIssue, String> statusResolver
     ) throws IOException {
-        Path parent = targetFile == null ? null : targetFile.getParent();
+        Objects.requireNonNull(targetFile, "targetFile must not be null");
+        Path parent = targetFile.getParent();
         if (parent != null) {
             Files.createDirectories(parent);
         }
