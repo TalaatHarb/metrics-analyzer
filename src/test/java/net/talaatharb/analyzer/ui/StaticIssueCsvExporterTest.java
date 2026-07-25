@@ -35,13 +35,13 @@ class StaticIssueCsvExporterTest {
 
         String csv = StaticIssueCsvExporter.buildCsvContent(root, List.of(issue), ignored -> "New");
 
-        String[] lines = csv.split("\\R");
-        assertEquals("file,line,description,severity,status,category,ruleId,tool,confidence,fixability,suggestedFix,effort,tags", lines[0]);
-        assertTrue(lines[1].startsWith("src/main/java/Sample.java,12,"));
-        assertTrue(lines[1].contains("\"Needs \"\"escaping\"\", with comma\""));
-        assertTrue(lines[1].contains(",New,"));
-        assertTrue(lines[1].contains("\"Replace line"));
-        assertTrue(lines[1].endsWith("cleanup; readability"));
+        String header = "file,line,description,severity,status,category,ruleId,tool,confidence,fixability,suggestedFix,effort,tags";
+        assertTrue(csv.startsWith(header + System.lineSeparator()));
+        assertTrue(csv.contains("src/main/java/Sample.java,12,"));
+        assertTrue(csv.contains("\"Needs \"\"escaping\"\", with comma\""));
+        assertTrue(csv.contains(",New,"));
+        assertTrue(csv.contains("\"Replace line\nwith better code\""));
+        assertTrue(csv.contains("cleanup; readability"));
     }
 
     @Test
