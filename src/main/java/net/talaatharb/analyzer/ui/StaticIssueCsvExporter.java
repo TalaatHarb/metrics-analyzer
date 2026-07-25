@@ -54,14 +54,32 @@ final class StaticIssueCsvExporter {
                     .append(csvCell(issue.getCategory())).append(',')
                     .append(csvCell(issue.getRuleId())).append(',')
                     .append(csvCell(issue.getTool())).append(',')
-                    .append(csvCell(String.format(Locale.US, "%.2f", issue.getConfidence()))).append(',')
+                    .append(csvCell(formatConfidence(issue))).append(',')
                     .append(csvCell(issue.getFixability())).append(',')
                     .append(csvCell(issue.getSuggestedFix())).append(',')
                     .append(csvCell(issue.getEffort())).append(',')
-                    .append(csvCell(String.join("; ", issue.getTags())))
+                    .append(csvCell(joinTags(issue)))
                     .append(System.lineSeparator());
         }
         return csv.toString();
+    }
+
+    private static String formatConfidence(StaticIssue issue) {
+        if (issue == null) {
+            return "";
+        }
+        double confidence = issue.getConfidence();
+        if (!Double.isFinite(confidence)) {
+            return "";
+        }
+        return String.format(Locale.US, "%.2f", confidence);
+    }
+
+    private static String joinTags(StaticIssue issue) {
+        if (issue == null || issue.getTags() == null || issue.getTags().isEmpty()) {
+            return "";
+        }
+        return String.join("; ", issue.getTags());
     }
 
     private static String resolveFilePath(Path projectRoot, Path issueFile) {

@@ -903,8 +903,28 @@ public class FileExplorerTab {
     private String buildIssuesExportFileName() {
         String analyzerSegment = latestAnalyzerName == null || latestAnalyzerName.isBlank()
                 ? "static-issues"
-                : latestAnalyzerName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+                : sanitizeFileNameSegment(latestAnalyzerName);
         return analyzerSegment + "-issues.csv";
+    }
+
+    private String sanitizeFileNameSegment(String value) {
+        if (value == null || value.isBlank()) {
+            return "static-issues";
+        }
+        StringBuilder sanitized = new StringBuilder();
+        boolean lastWasSeparator = false;
+        int[] codePoints = value.codePoints().toArray();
+        for (int codePoint : codePoints) {
+            if (Character.isLetterOrDigit(codePoint)) {
+                sanitized.appendCodePoint(Character.toLowerCase(codePoint));
+                lastWasSeparator = false;
+            } else if (!lastWasSeparator) {
+                sanitized.append('-');
+                lastWasSeparator = true;
+            }
+        }
+        String normalized = sanitized.toString().replaceAll("^-+|-+$", "");
+        return normalized.isBlank() ? "static-issues" : normalized;
     }
 
     private Set<String> collectFingerprints(List<StaticIssue> issues) {
