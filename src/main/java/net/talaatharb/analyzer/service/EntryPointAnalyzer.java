@@ -87,11 +87,25 @@ public class EntryPointAnalyzer implements StaticAnalyzer {
             "\\bimplements\\b[^{;]*\\bApplicationRunner\\b");
 
     // ── Helper: extract method or class name from a declaration line ─────────
+    // Pattern structure:
+    //   Group 1 (optional first modifier)  – e.g. "public", "protected"
+    //   Repeated modifiers                 – e.g. "static final"
+    //   One or more type tokens             – e.g. "List<String>", "void"
+    //   Capture group (\\w+)               – the declared name (method or class)
+    //   Opening delimiter                  – '(' for methods, '{' for types
     private static final Pattern DECLARATION_NAME = Pattern.compile(
             "(?:public|protected|private|static|final|abstract|synchronized|default|"
             + "native|strictfp)?\\s*(?:(?:public|protected|private|static|final|abstract|"
             + "synchronized|default|native|strictfp)\\s+)*"
             + "(?:[\\w<>\\[\\],$?]+\\s+)+(\\w+)\\s*[({]");
+
+    /**
+     * Confidence score applied to all entry-point detections.
+     * Regex-based detection on source text is reliable for the well-known annotation and
+     * structural patterns targeted here, but can produce false positives for unusually
+     * formatted or commented-out code, so a score below 1.0 is appropriate.
+     */
+    private static final double ENTRY_POINT_CONFIDENCE = 0.85;
 
     // ── Helper: extract quoted value from annotation (e.g. path) ────────────
     private static final Pattern ANNOTATION_QUOTED_VALUE = Pattern.compile("\"([^\"]+)\"");
@@ -375,7 +389,7 @@ public class EntryPointAnalyzer implements StaticAnalyzer {
                 "entry-point",
                 ruleId,
                 getName(),
-                0.85,
+                ENTRY_POINT_CONFIDENCE,
                 "none",
                 suggestedFix,
                 "none",
