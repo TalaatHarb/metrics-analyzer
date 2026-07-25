@@ -62,6 +62,7 @@ import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.Node;
+import javafx.stage.FileChooser;
 import javafx.geometry.Pos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -210,6 +211,7 @@ public class FileExplorerTab {
 
         MenuButton operationsMenu = new MenuButton("Operations");
         MenuItem scanMenuItem = new MenuItem("Scan for Problems");
+        MenuItem exportIssuesMenuItem = new MenuItem("Export Visible Issues as CSV");
         MenuItem setBaselineMenuItem = new MenuItem("Set Baseline From Current Results");
         MenuItem fixSafeIssuesMenuItem = new MenuItem("Fix All Safe Issues (Visible)");
         MenuItem undoFixMenuItem = new MenuItem("Undo Last Fix");
@@ -221,6 +223,7 @@ public class FileExplorerTab {
         MenuItem clearCoverageMenuItem = new MenuItem("Clear Coverage Info");
         operationsMenu.getItems().addAll(
                 scanMenuItem,
+                exportIssuesMenuItem,
                 setBaselineMenuItem,
                 fixSafeIssuesMenuItem,
                 undoFixMenuItem,
@@ -253,6 +256,7 @@ public class FileExplorerTab {
         });
         
         saveFileMenuItem.setOnAction(e -> saveCurrentFile());
+        exportIssuesMenuItem.setOnAction(e -> exportVisibleIssuesAsCsv(problemsTable));
         reloadFileMenuItem.setOnAction(e -> {
             if (currentFilePath != null && Files.isRegularFile(currentFilePath)) {
                 loadFileContent(currentFilePath);
@@ -844,6 +848,63 @@ public class FileExplorerTab {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
+    }
+
+    private void showInformation(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void showError(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.ERROR);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
+    private void exportVisibleIssuesAsCsv(TableView<StaticIssue> problemsTable) {
+        if (problemsTable == null || problemsTable.getItems().isEmpty()) {
+            showWarning("No Issues to Export", "Run an analyzer first to export static issues.");
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Export Static Issues as CSV");
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("CSV Files", "*.csv"));
+        fileChooser.setInitialFileName(buildIssuesExportFileName());
+        if (rootPath != null && Files.isDirectory(rootPath)) {
+            fileChooser.setInitialDirectory(rootPath.toFile());
+        }
+
+        File selectedFile = fileChooser.showSaveDialog(
+                fileTree.getScene() == null ? null : fileTree.getScene().getWindow());
+        if (selectedFile == null) {
+            return;
+        }
+
+        try {
+            StaticIssueCsvExporter.export(
+                    selectedFile.toPath(),
+                    rootPath,
+                    new ArrayList<>(problemsTable.getItems()),
+                    this::getIssueStatus
+            );
+            showInformation("Export Complete", "Static issues exported to " + selectedFile.toPath() + ".");
+        } catch (IOException ex) {
+            LOGGER.error("Failed to export static issues to CSV", ex);
+            showError("Export Failed", "Unable to export static issues to CSV.");
+        }
+    }
+
+    private String buildIssuesExportFileName() {
+        String analyzerSegment = latestAnalyzerName == null || latestAnalyzerName.isBlank()
+                ? "static-issues"
+                : latestAnalyzerName.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-");
+        return analyzerSegment + "-issues.csv";
     }
 
     private Set<String> collectFingerprints(List<StaticIssue> issues) {
