@@ -21,7 +21,7 @@ import java.util.stream.Stream;
 public class CommunicationPatternAnalyzer implements StaticAnalyzer {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommunicationPatternAnalyzer.class);
 
-    private static final Pattern TYPE_DECLARATION = Pattern.compile("\\b(?:class|interface|enum)\\s+(\\w+)\\b");
+    private static final Pattern TYPE_DECLARATION = Pattern.compile("\\b(?:class|interface|enum|record)\\s+(\\w+)\\b");
     private static final Pattern METHOD_DECLARATION = Pattern.compile(
             "(?:(?:public|protected|private|static|final|abstract|synchronized|default|native|strictfp)\\s+)*"
                     + "(?:<[^>]+>\\s+)?[\\w<>\\[\\],.?$]+\\s+(\\w+)\\s*\\([^;{}]*\\)\\s*(?:\\{|throws\\b)"
@@ -71,7 +71,7 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
     );
     private static final Pattern THREAD_OR_EXECUTOR = Pattern.compile(
             "\\bnew\\s+Thread\\s*\\("
-                    + "|\\b\\w*executor(?:Service)?\\s*\\.\\s*(submit|execute|invokeAll|invokeAny|schedule|scheduleAtFixedRate|scheduleWithFixedDelay)\\s*\\("
+                    + "|\\b\\w*[eE]xecutor(?:[sS]ervice)?\\s*\\.\\s*(submit|execute|invokeAll|invokeAny|schedule|scheduleAtFixedRate|scheduleWithFixedDelay)\\s*\\("
                     + "|\\bCompletableFuture\\s*\\.\\s*(runAsync|supplyAsync)\\s*\\("
     );
     private static final Pattern SHARED_MEMORY = Pattern.compile(
@@ -149,9 +149,17 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
                 continue;
             }
 
+            if (!annotationBuffer.isEmpty() && isCommentLine(trimmed)) {
+                continue;
+            }
+
             processLine(file, lineNum, trimmed, annotationBuffer, bufferStartLine, context, issues);
             annotationBuffer.clear();
             bufferStartLine = 0;
+        }
+
+        if (!annotationBuffer.isEmpty()) {
+            processLine(file, lines.size(), "", annotationBuffer, bufferStartLine, context, issues);
         }
     }
 
@@ -309,11 +317,32 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
     }
 
     private String formatQuotedValue(String line) {
-        Matcher matcher = QUOTED_VALUE.matcher(line);
-        if (!matcher.find()) {
+        String value = extractSingleQuotedValue(line);
+        if (value.isEmpty()) {
             return "";
         }
-        return " → " + matcher.group(1);
+        return " → " + value;
+    }
+
+    private String extractSingleQuotedValue(String line) {
+        Matcher matcher = QUOTED_VALUE.matcher(line);
+        String value = "";
+        int count = 0;
+        while (matcher.find()) {
+            value = matcher.group(1);
+            count++;
+            if (count > 1) {
+                return "";
+            }
+        }
+        return count == 1 ? value : "";
+    }
+
+    private boolean isCommentLine(String line) {
+        return line.startsWith("//")
+                || line.startsWith("/*")
+                || line.startsWith("*")
+                || line.startsWith("*/");
     }
 
     private StaticIssue createIssue(Path file, int lineNum, String description, String ruleId,

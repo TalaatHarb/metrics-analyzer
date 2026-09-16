@@ -177,6 +177,24 @@ class CommunicationPatternAnalyzerTest {
     }
 
     @Test
+    void shouldDetectScheduledExecutorVariant(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("Scheduler.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class Scheduler {",
+                "    void schedule() {",
+                "        scheduledExecutorService.scheduleAtFixedRate(this::runJob, 0, 10, TimeUnit.SECONDS);",
+                "    }",
+                "}"
+        ));
+
+        List<StaticIssue> issues = analyzer.analyzeFile(file);
+
+        assertTrue(issues.stream().anyMatch(issue ->
+                "COMM_PATTERN_ASYNC_EXECUTION".equals(issue.getRuleId())
+                        && issue.getDescription().contains("scheduleAtFixedRate")));
+    }
+
+    @Test
     void shouldScanEntireProject(@TempDir Path tempDir) throws Exception {
         Path sub = tempDir.resolve("com/example");
         Files.createDirectories(sub);
@@ -221,5 +239,41 @@ class CommunicationPatternAnalyzerTest {
             assertEquals("Communication Pattern Analyzer", issue.getTool());
             assertFalse(issue.getTags().isEmpty());
         });
+    }
+
+    @Test
+    void shouldPreserveAnnotationBufferAcrossComments(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("AsyncWorker.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "class AsyncWorker {",
+                "    @Async",
+                "    // dispatched on a task executor",
+                "    void runTask() {}",
+                "}"
+        ));
+
+        List<StaticIssue> issues = analyzer.analyzeFile(file);
+
+        assertTrue(issues.stream().anyMatch(issue ->
+                "COMM_PATTERN_ASYNC_ANNOTATION".equals(issue.getRuleId())
+                        && issue.getDescription().contains("runTask")));
+    }
+
+    @Test
+    void shouldIncludeRecordNameInDetectedLocation(@TempDir Path tempDir) throws Exception {
+        Path file = tempDir.resolve("RecordClient.java");
+        Files.writeString(file, String.join(System.lineSeparator(),
+                "record RecordClient(String baseUrl) {",
+                "    void fetch() {",
+                "        restTemplate.exchange(\"http://example\", HttpMethod.GET, null, String.class);",
+                "    }",
+                "}"
+        ));
+
+        List<StaticIssue> issues = analyzer.analyzeFile(file);
+
+        assertTrue(issues.stream().anyMatch(issue ->
+                "COMM_PATTERN_HTTP_REST_TEMPLATE".equals(issue.getRuleId())
+                        && issue.getDescription().contains("RecordClient.fetch()")));
     }
 }
