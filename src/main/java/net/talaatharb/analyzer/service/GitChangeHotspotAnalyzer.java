@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -57,17 +58,35 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
         Map<String, String> renameAliases = new HashMap<>();
         Set<Path> filesInCommit = new HashSet<>();
         List<String> output = runGitLog(gitRoot);
-        for (String line : output) {
-            String text = line == null ? "" : line.trim();
-            if (text.isEmpty()) {
+        for (int i = 0; i < output.size(); ) {
+            String token = output.get(i);
+            if (token == null || token.isEmpty()) {
+                i++;
                 continue;
             }
-            if (COMMIT_MARKER.equals(text)) {
+            String markerCandidate = token.trim();
+            if (COMMIT_MARKER.equals(markerCandidate)) {
                 incrementCommitFrequency(frequency, filesInCommit);
                 filesInCommit.clear();
+                i++;
                 continue;
             }
-            String relative = resolveChangedPath(text, renameAliases);
+            String status = markerCandidate;
+            String relative = null;
+            if ((status.startsWith("R") || status.startsWith("C")) && i + 2 < output.size()) {
+                String oldPath = output.get(i + 1);
+                String newPath = output.get(i + 2);
+                String canonicalNewPath = resolveCanonicalPath(newPath, renameAliases);
+                renameAliases.put(oldPath, canonicalNewPath);
+                relative = canonicalNewPath;
+                i += 3;
+            } else if (i + 1 < output.size()) {
+                relative = resolveCanonicalPath(output.get(i + 1), renameAliases);
+                i += 2;
+            } else {
+                i++;
+            }
+
             if (relative == null || relative.isBlank()) {
                 continue;
             }
@@ -116,23 +135,29 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
     }
 
     private List<String> runGitLog(Path gitRoot) {
-        List<String> lines = new ArrayList<>();
+        List<String> tokens = new ArrayList<>();
         ProcessBuilder processBuilder = new ProcessBuilder(
                 "git",
                 "log",
+                "--all",
                 "-M",
                 "--name-status",
-                "--pretty=format:" + COMMIT_MARKER,
+                "-z",
+                "--pretty=format:" + COMMIT_MARKER + "%x00",
                 "--no-merges"
         ).redirectErrorStream(true)
                 .directory(gitRoot.toFile());
 
         try {
             Process process = processBuilder.start();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    lines.add(line);
+            byte[] outputBytes = process.getInputStream().readAllBytes();
+            String output = new String(outputBytes, StandardCharsets.UTF_8);
+            if (!output.isEmpty()) {
+                String[] split = output.split("\u0000", -1);
+                for (String token : split) {
+                    if (!token.isEmpty()) {
+                        tokens.add(token);
+                    }
                 }
             }
             int exit = process.waitFor();
@@ -145,30 +170,13 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
                 Thread.currentThread().interrupt();
             }
         }
-        return lines;
+        return tokens;
     }
 
     private void incrementCommitFrequency(Map<Path, Integer> frequency, Set<Path> filesInCommit) {
         for (Path file : filesInCommit) {
             frequency.merge(file, 1, Integer::sum);
         }
-    }
-
-    private String resolveChangedPath(String line, Map<String, String> renameAliases) {
-        String[] parts = line.split("\t");
-        if (parts.length < 2) {
-            return null;
-        }
-        String status = parts[0];
-        if (status.startsWith("R") && parts.length >= 3) {
-            String canonicalNewPath = resolveCanonicalPath(parts[2], renameAliases);
-            renameAliases.put(parts[1], canonicalNewPath);
-            return canonicalNewPath;
-        }
-        if (status.startsWith("C") && parts.length >= 3) {
-            return resolveCanonicalPath(parts[2], renameAliases);
-        }
-        return resolveCanonicalPath(parts[1], renameAliases);
     }
 
     private String resolveCanonicalPath(String path, Map<String, String> renameAliases) {
