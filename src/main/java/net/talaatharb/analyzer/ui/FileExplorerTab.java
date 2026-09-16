@@ -22,6 +22,7 @@ import org.fxmisc.flowless.VirtualizedScrollPane;
 import net.talaatharb.analyzer.model.StaticIssue;
 import net.talaatharb.analyzer.service.StaticAnalyzer;
 import net.talaatharb.analyzer.service.BasicStaticAnalyzer;
+import net.talaatharb.analyzer.service.CommunicationPatternAnalyzer;
 import net.talaatharb.analyzer.service.MissingThingsAnalyzer;
 import net.talaatharb.analyzer.service.PMDStaticAnalyzer;
 import net.talaatharb.analyzer.service.CheckstyleStaticAnalyzer;
@@ -189,6 +190,7 @@ public class FileExplorerTab {
             new SemgrepSastStaticAnalyzer(),
             new JQAssistantStaticAnalyzer(),
             new GitChangeHotspotAnalyzer(),
+            new CommunicationPatternAnalyzer(),
             new EntryPointAnalyzer()
         );
         analyzerComboBox.getItems().addAll(allAnalyzers);
