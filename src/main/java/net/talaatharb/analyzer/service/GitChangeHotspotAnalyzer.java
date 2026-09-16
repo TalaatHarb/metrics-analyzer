@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
@@ -73,7 +72,7 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
                 continue;
             }
             Path file = gitRoot.resolve(relative).normalize();
-            if (!file.startsWith(gitRoot) || !file.startsWith(normalizedRoot) || !Files.isRegularFile(file)) {
+            if (!file.startsWith(gitRoot) || !file.startsWith(normalizedRoot)) {
                 continue;
             }
             filesInCommit.add(file);
@@ -97,6 +96,7 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
 
     private Path resolveGitRoot(Path workingDir) {
         ProcessBuilder processBuilder = new ProcessBuilder("git", "rev-parse", "--show-toplevel")
+                .redirectErrorStream(true)
                 .directory(workingDir.toFile());
         try {
             Process process = processBuilder.start();
@@ -124,7 +124,8 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
                 "--name-status",
                 "--pretty=format:" + COMMIT_MARKER,
                 "--no-merges"
-        ).directory(gitRoot.toFile());
+        ).redirectErrorStream(true)
+                .directory(gitRoot.toFile());
 
         try {
             Process process = processBuilder.start();
