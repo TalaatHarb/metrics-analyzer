@@ -28,6 +28,7 @@ import net.talaatharb.analyzer.service.CheckstyleStaticAnalyzer;
 import net.talaatharb.analyzer.service.SpotBugsStaticAnalyzer;
 import net.talaatharb.analyzer.service.FindBugsStaticAnalyzer;
 import net.talaatharb.analyzer.service.FindSecBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.GitChangeHotspotAnalyzer;
 import net.talaatharb.analyzer.service.InferStaticAnalyzer;
 import net.talaatharb.analyzer.service.SemgrepSastStaticAnalyzer;
 import net.talaatharb.analyzer.service.JQAssistantStaticAnalyzer;
@@ -187,6 +188,7 @@ public class FileExplorerTab {
             new InferStaticAnalyzer(),
             new SemgrepSastStaticAnalyzer(),
             new JQAssistantStaticAnalyzer(),
+            new GitChangeHotspotAnalyzer(),
             new EntryPointAnalyzer()
         );
         analyzerComboBox.getItems().addAll(allAnalyzers);
