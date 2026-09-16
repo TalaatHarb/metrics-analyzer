@@ -61,6 +61,25 @@ class GitChangeHotspotAnalyzerTest {
         assertEquals(2, issues.size());
     }
 
+    @Test
+    void shouldCarryFrequencyAcrossRenames(@TempDir Path tempDir) throws Exception {
+        initGitRepo(tempDir);
+        Path oldName = tempDir.resolve("legacy.txt");
+        Path newName = tempDir.resolve("modern.txt");
+
+        writeAndCommit(tempDir, oldName, "v1", "add legacy");
+        run(tempDir, "git", "mv", "legacy.txt", "modern.txt");
+        run(tempDir, "git", "commit", "-m", "rename legacy to modern");
+        writeAndCommit(tempDir, newName, "v2", "update modern");
+
+        GitChangeHotspotAnalyzer analyzer = new GitChangeHotspotAnalyzer();
+        List<StaticIssue> issues = analyzer.analyzeProject(tempDir);
+
+        assertEquals(1, issues.size());
+        assertEquals(newName.toAbsolutePath().normalize(), issues.get(0).getFile().toAbsolutePath().normalize());
+        assertTrue(issues.get(0).getDescription().contains("changed 3 time(s)"));
+    }
+
     private static void initGitRepo(Path root) throws Exception {
         run(root, "git", "init");
         run(root, "git", "config", "user.name", "Test User");

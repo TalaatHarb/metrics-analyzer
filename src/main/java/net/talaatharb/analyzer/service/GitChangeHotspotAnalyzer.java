@@ -13,15 +13,18 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
     private static final Logger LOGGER = LoggerFactory.getLogger(GitChangeHotspotAnalyzer.class);
     private static final int DEFAULT_MAX_RESULTS = 300;
     private static final String HOTSPOT_RULE_ID = "GIT_CHANGE_HOTSPOT";
+    private static final String COMMIT_MARKER = "__GIT_COMMIT__";
 
     private final int maxResults;
 
@@ -52,18 +55,30 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
         }
 
         Map<Path, Integer> frequency = new HashMap<>();
+        Map<String, String> renameAliases = new HashMap<>();
+        Set<Path> filesInCommit = new HashSet<>();
         List<String> output = runGitLog(gitRoot);
         for (String line : output) {
-            String relative = line == null ? "" : line.trim();
-            if (relative.isEmpty()) {
+            String text = line == null ? "" : line.trim();
+            if (text.isEmpty()) {
+                continue;
+            }
+            if (COMMIT_MARKER.equals(text)) {
+                incrementCommitFrequency(frequency, filesInCommit);
+                filesInCommit.clear();
+                continue;
+            }
+            String relative = resolveChangedPath(text, renameAliases);
+            if (relative == null || relative.isBlank()) {
                 continue;
             }
             Path file = gitRoot.resolve(relative).normalize();
             if (!file.startsWith(gitRoot) || !file.startsWith(normalizedRoot) || !Files.isRegularFile(file)) {
                 continue;
             }
-            frequency.merge(file, 1, Integer::sum);
+            filesInCommit.add(file);
         }
+        incrementCommitFrequency(frequency, filesInCommit);
 
         List<Map.Entry<Path, Integer>> ranked = frequency.entrySet().stream()
                 .sorted(Comparator.<Map.Entry<Path, Integer>>comparingInt(Map.Entry::getValue).reversed()
@@ -105,8 +120,9 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
         ProcessBuilder processBuilder = new ProcessBuilder(
                 "git",
                 "log",
-                "--name-only",
-                "--pretty=format:",
+                "-M",
+                "--name-status",
+                "--pretty=format:" + COMMIT_MARKER,
                 "--no-merges"
         ).directory(gitRoot.toFile());
 
@@ -129,6 +145,38 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
             }
         }
         return lines;
+    }
+
+    private void incrementCommitFrequency(Map<Path, Integer> frequency, Set<Path> filesInCommit) {
+        for (Path file : filesInCommit) {
+            frequency.merge(file, 1, Integer::sum);
+        }
+    }
+
+    private String resolveChangedPath(String line, Map<String, String> renameAliases) {
+        String[] parts = line.split("\t");
+        if (parts.length < 2) {
+            return null;
+        }
+        String status = parts[0];
+        if (status.startsWith("R") && parts.length >= 3) {
+            String canonicalNewPath = resolveCanonicalPath(parts[2], renameAliases);
+            renameAliases.put(parts[1], canonicalNewPath);
+            return canonicalNewPath;
+        }
+        if (status.startsWith("C") && parts.length >= 3) {
+            return resolveCanonicalPath(parts[2], renameAliases);
+        }
+        return resolveCanonicalPath(parts[1], renameAliases);
+    }
+
+    private String resolveCanonicalPath(String path, Map<String, String> renameAliases) {
+        String current = path;
+        Set<String> seen = new HashSet<>();
+        while (current != null && seen.add(current) && renameAliases.containsKey(current)) {
+            current = renameAliases.get(current);
+        }
+        return current;
     }
 
     private StaticIssue createIssue(Path file, int changeCount, int rank) {
