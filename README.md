@@ -60,6 +60,7 @@ The static analysis selector in **File Explorer** includes additional scanners f
 - Infer
 - SAST (Semgrep)
 - jQAssistant
+- Git Change Hotspots (`git log` frequency ranking of most frequently changed files)
 
 The File Explorer code area now supports direct editing and saving via **Operations → Save Current File**.
 
