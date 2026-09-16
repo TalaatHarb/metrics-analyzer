@@ -164,12 +164,10 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
             }
 
             if (!annotationBuffer.isEmpty() && trimmed.startsWith("/*")) {
-                insideBufferedBlockComment = true;
                 if (trimmed.contains("*/")) {
-                    insideBufferedBlockComment = false;
-                    annotationBuffer.clear();
-                    bufferStartLine = 0;
+                    continue;
                 }
+                insideBufferedBlockComment = true;
                 continue;
             }
 
