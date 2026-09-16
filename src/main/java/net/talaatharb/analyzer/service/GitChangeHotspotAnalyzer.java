@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
     private static final Logger LOGGER = LoggerFactory.getLogger(GitChangeHotspotAnalyzer.class);
@@ -68,7 +69,7 @@ public class GitChangeHotspotAnalyzer implements StaticAnalyzer {
                 .sorted(Comparator.<Map.Entry<Path, Integer>>comparingInt(Map.Entry::getValue).reversed()
                         .thenComparing(entry -> entry.getKey().toString()))
                 .limit(maxResults)
-                .toList();
+                .collect(Collectors.toList());
 
         for (int i = 0; i < ranked.size(); i++) {
             Map.Entry<Path, Integer> entry = ranked.get(i);
