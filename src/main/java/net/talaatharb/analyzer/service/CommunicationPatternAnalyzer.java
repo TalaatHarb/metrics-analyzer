@@ -132,10 +132,20 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
         List<String> annotationBuffer = new ArrayList<>();
         int bufferStartLine = 0;
         ScanContext context = new ScanContext();
+        boolean insideBufferedBlockComment = false;
 
         for (int i = 0; i < lines.size(); i++) {
             String trimmed = lines.get(i).trim();
             int lineNum = i + 1;
+
+            if (insideBufferedBlockComment) {
+                if (trimmed.contains("*/")) {
+                    insideBufferedBlockComment = false;
+                    annotationBuffer.clear();
+                    bufferStartLine = 0;
+                }
+                continue;
+            }
 
             if (trimmed.isEmpty()) {
                 continue;
@@ -149,7 +159,17 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
                 continue;
             }
 
-            if (!annotationBuffer.isEmpty() && isCommentLine(trimmed)) {
+            if (!annotationBuffer.isEmpty() && trimmed.startsWith("//")) {
+                continue;
+            }
+
+            if (!annotationBuffer.isEmpty() && trimmed.startsWith("/*")) {
+                insideBufferedBlockComment = true;
+                if (trimmed.contains("*/")) {
+                    insideBufferedBlockComment = false;
+                    annotationBuffer.clear();
+                    bufferStartLine = 0;
+                }
                 continue;
             }
 
@@ -165,14 +185,23 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
 
     private void processLine(Path file, int lineNum, String line, List<String> annotations,
             int bufferStartLine, ScanContext context, List<StaticIssue> issues) {
-        updateContext(context, line);
         int reportLine = bufferStartLine > 0 ? bufferStartLine : lineNum;
+        String declaredType = extractDeclaredType(line);
+        String declaredMethod = extractDeclaredMethod(line);
+        ScanContext declarationContext = context.copy();
+        if (!declaredType.isBlank()) {
+            declarationContext.currentType = declaredType;
+            declarationContext.currentMethod = "";
+        }
+        if (!declaredMethod.isBlank()) {
+            declarationContext.currentMethod = declaredMethod;
+        }
 
         for (String annotation : annotations) {
             if (FEIGN_CLIENT.matcher(annotation).find()) {
                 issues.add(createIssue(file, reportLine,
                         "Communication pattern detected: HTTP client via @FeignClient"
-                                + formatLocation(context),
+                                + formatLocation(declarationContext),
                         "COMM_PATTERN_FEIGN_CLIENT",
                         "Class declares an external HTTP client through a Feign interface.",
                         Arrays.asList("communication", "http", "feign", "external-service")));
@@ -181,7 +210,7 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
             if (ASYNC_ANNOTATION.matcher(annotation).find()) {
                 issues.add(createIssue(file, reportLine,
                         "Communication pattern detected: Independent async execution via @Async"
-                                + formatLocation(context),
+                                + formatLocation(declarationContext),
                         "COMM_PATTERN_ASYNC_ANNOTATION",
                         "Method executes independently on an async executor and typically communicates through futures, callbacks, or shared state.",
                         Arrays.asList("communication", "async", "threading", "shared-memory")));
@@ -192,96 +221,109 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
                 "HTTP client via RestTemplate.%s",
                 "COMM_PATTERN_HTTP_REST_TEMPLATE",
                 "Code performs outbound HTTP communication using Spring RestTemplate.",
-                Arrays.asList("communication", "http", "resttemplate", "external-service"));
+                Arrays.asList("communication", "http", "resttemplate", "external-service"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, WEB_CLIENT,
                 "HTTP client via WebClient.%s",
                 "COMM_PATTERN_HTTP_WEBCLIENT",
                 "Code performs outbound HTTP communication using Spring WebClient.",
-                Arrays.asList("communication", "http", "webclient", "external-service"));
+                Arrays.asList("communication", "http", "webclient", "external-service"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, HTTP_CLIENT,
                 "HTTP client via HttpClient.%s",
                 "COMM_PATTERN_HTTP_CLIENT",
                 "Code performs outbound HTTP communication using an HttpClient-style API.",
-                Arrays.asList("communication", "http", "client", "external-service"));
+                Arrays.asList("communication", "http", "client", "external-service"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, GRAPHQL_CLIENT,
                 "GraphQL client communication via %s",
                 "COMM_PATTERN_GRAPHQL_CLIENT",
                 "Code communicates with a GraphQL endpoint from the application.",
-                Arrays.asList("communication", "graphql", "external-service"));
+                Arrays.asList("communication", "graphql", "external-service"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, GRPC_CLIENT,
                 "gRPC client communication via %s",
                 "COMM_PATTERN_GRPC_CLIENT",
                 "Code communicates with another service over gRPC.",
-                Arrays.asList("communication", "grpc", "external-service"));
+                Arrays.asList("communication", "grpc", "external-service"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, JMS_TEMPLATE,
                 "JMS messaging via JmsTemplate.%s",
                 "COMM_PATTERN_JMS",
                 "Code exchanges messages through JMS queues or topics.",
-                Arrays.asList("communication", "jms", "messaging", "queue"));
+                Arrays.asList("communication", "jms", "messaging", "queue"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, KAFKA_TEMPLATE,
                 "Kafka messaging via KafkaTemplate.%s",
                 "COMM_PATTERN_KAFKA",
                 "Code publishes messages to Kafka.",
-                Arrays.asList("communication", "kafka", "messaging", "eventing"));
+                Arrays.asList("communication", "kafka", "messaging", "eventing"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, RABBIT_TEMPLATE,
                 "RabbitMQ messaging via RabbitTemplate.%s",
                 "COMM_PATTERN_RABBITMQ",
                 "Code exchanges messages with RabbitMQ.",
-                Arrays.asList("communication", "rabbitmq", "messaging", "queue"));
+                Arrays.asList("communication", "rabbitmq", "messaging", "queue"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, SQS_TEMPLATE,
                 "SQS messaging via SqsTemplate.%s",
                 "COMM_PATTERN_SQS",
                 "Code exchanges messages with Amazon SQS.",
-                Arrays.asList("communication", "sqs", "messaging", "queue"));
+                Arrays.asList("communication", "sqs", "messaging", "queue"),
+                true);
         emitCallIssue(file, reportLine, line, context, issues, DATABASE_ACCESS,
                 "Shared database access via %s",
                 "COMM_PATTERN_DATABASE",
                 "Code communicates through a shared database or direct SQL/JPA access.",
-                Arrays.asList("communication", "database", "shared-database", "persistence"));
+                Arrays.asList("communication", "database", "shared-database", "persistence"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, TCP_SOCKET,
                 "TCP socket communication via %s",
                 "COMM_PATTERN_TCP_SOCKET",
                 "Code opens direct TCP socket communication.",
-                Arrays.asList("communication", "tcp", "socket", "network"));
+                Arrays.asList("communication", "tcp", "socket", "network"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, UDP_SOCKET,
                 "UDP socket communication via %s",
                 "COMM_PATTERN_UDP_SOCKET",
                 "Code opens direct UDP socket communication.",
-                Arrays.asList("communication", "udp", "socket", "network"));
+                Arrays.asList("communication", "udp", "socket", "network"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, THREAD_OR_EXECUTOR,
                 "Independent execution via %s",
                 "COMM_PATTERN_ASYNC_EXECUTION",
                 "Code starts work that can run independently within the application process.",
-                Arrays.asList("communication", "async", "threading", "independent-execution"));
+                Arrays.asList("communication", "async", "threading", "independent-execution"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, SHARED_MEMORY,
                 "Shared-memory coordination via %s",
                 "COMM_PATTERN_SHARED_MEMORY",
                 "Code coordinates work through in-memory queues or buffers shared between threads.",
-                Arrays.asList("communication", "shared-memory", "queue", "threading"));
+                Arrays.asList("communication", "shared-memory", "queue", "threading"),
+                false);
         emitCallIssue(file, reportLine, line, context, issues, EXTERNAL_PROCESS,
                 "External process execution via %s",
                 "COMM_PATTERN_EXTERNAL_PROCESS",
                 "Code launches a process outside the application JVM and may communicate through command arguments, files, or process I/O streams.",
-                Arrays.asList("communication", "process", "external-process", "integration"));
+                Arrays.asList("communication", "process", "external-process", "integration"),
+                false);
+
+        updateContext(context, declaredType, declaredMethod);
     }
 
-    private void updateContext(ScanContext context, String line) {
-        Matcher typeMatcher = TYPE_DECLARATION.matcher(line);
-        if (typeMatcher.find()) {
-            context.currentType = typeMatcher.group(1);
+    private void updateContext(ScanContext context, String declaredType, String declaredMethod) {
+        if (!declaredType.isBlank()) {
+            context.currentType = declaredType;
             context.currentMethod = "";
-            return;
         }
-
-        Matcher methodMatcher = METHOD_DECLARATION.matcher(line);
-        if (methodMatcher.find()) {
-            context.currentMethod = methodMatcher.group(1);
+        if (!declaredMethod.isBlank()) {
+            context.currentMethod = declaredMethod;
         }
     }
 
     private void emitCallIssue(Path file, int reportLine, String line, ScanContext context,
             List<StaticIssue> issues, Pattern pattern, String titleTemplate, String ruleId,
-            String suggestedFix, List<String> tags) {
+            String suggestedFix, List<String> tags, boolean includeQuotedValue) {
         Matcher matcher = pattern.matcher(line);
         if (!matcher.find()) {
             return;
@@ -291,8 +333,18 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
         String description = "Communication pattern detected: "
                 + String.format(titleTemplate, operation)
                 + formatLocation(context)
-                + formatQuotedValue(line);
+                + formatQuotedValue(line, includeQuotedValue);
         issues.add(createIssue(file, reportLine, description, ruleId, suggestedFix, tags));
+    }
+
+    private String extractDeclaredType(String line) {
+        Matcher typeMatcher = TYPE_DECLARATION.matcher(line);
+        return typeMatcher.find() ? typeMatcher.group(1) : "";
+    }
+
+    private String extractDeclaredMethod(String line) {
+        Matcher methodMatcher = METHOD_DECLARATION.matcher(line);
+        return methodMatcher.find() ? methodMatcher.group(1) : "";
     }
 
     private String firstNonBlankGroup(Matcher matcher) {
@@ -316,7 +368,10 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
         return builder.toString();
     }
 
-    private String formatQuotedValue(String line) {
+    private String formatQuotedValue(String line, boolean includeQuotedValue) {
+        if (!includeQuotedValue) {
+            return "";
+        }
         String value = extractSingleQuotedValue(line);
         if (value.isEmpty()) {
             return "";
@@ -336,13 +391,6 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
             }
         }
         return count == 1 ? value : "";
-    }
-
-    private boolean isCommentLine(String line) {
-        return line.startsWith("//")
-                || line.startsWith("/*")
-                || line.startsWith("*")
-                || line.startsWith("*/");
     }
 
     private StaticIssue createIssue(Path file, int lineNum, String description, String ruleId,
@@ -372,5 +420,12 @@ public class CommunicationPatternAnalyzer implements StaticAnalyzer {
     private static final class ScanContext {
         private String currentType = "";
         private String currentMethod = "";
+
+        private ScanContext copy() {
+            ScanContext copy = new ScanContext();
+            copy.currentType = currentType;
+            copy.currentMethod = currentMethod;
+            return copy;
+        }
     }
 }
