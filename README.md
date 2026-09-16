@@ -61,6 +61,7 @@ The static analysis selector in **File Explorer** includes additional scanners f
 - SAST (Semgrep)
 - jQAssistant
 - Git Change Hotspots (`git log` frequency ranking of most frequently changed files)
+- Communication Pattern Analyzer (HTTP/gRPC/GraphQL clients, messaging templates, database access, sockets, async execution, and external processes)
 
 The File Explorer code area now supports direct editing and saving via **Operations → Save Current File**.
 
