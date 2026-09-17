@@ -23,7 +23,7 @@ This application is a Java Source Project Analyzer built using [Spoon](https://s
 
 ## How to Build
 
-Ensure you have Java 11 or higher and Maven installed. Run the following command in the project root:
+Ensure you have Java 25 or higher and Maven installed. Run the following command in the project root:
 
 ```bash
 mvn clean package

@@ -5,10 +5,12 @@ import net.talaatharb.analyzer.model.DependencyRelation;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -65,6 +67,19 @@ class JavaSourceProjectAnalyzerTest {
         assertFalse(result.getClassMetrics().isEmpty());
         assertTrue(classCouplings.stream().anyMatch(c -> "p1.A".equals(c.getSource()) && "p2.B".equals(c.getTarget())));
         assertTrue(packageCouplings.stream().anyMatch(c -> "p1".equals(c.getSource()) && "p2".equals(c.getTarget())));
+    }
+
+    @Test
+    void shouldParseClasspathEntriesUsingPlatformSeparator(@TempDir Path tempDir) throws Exception {
+        Path first = Files.createFile(tempDir.resolve("first.jar"));
+        Path second = Files.createFile(tempDir.resolve("second.jar"));
+
+        String rawClasspath = first + File.pathSeparator + "  " + second + System.lineSeparator()
+                + File.pathSeparator + first;
+
+        List<String> entries = JavaSourceProjectAnalyzer.parseClasspathEntries(rawClasspath);
+
+        assertEquals(List.of(first.toString(), second.toString()), entries);
     }
 
     @Test

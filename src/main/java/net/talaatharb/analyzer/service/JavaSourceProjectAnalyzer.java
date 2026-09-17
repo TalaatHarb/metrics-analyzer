@@ -5,20 +5,24 @@ import net.talaatharb.analyzer.model.ClassMetrics;
 import net.talaatharb.analyzer.model.DependencyRelation;
 import spoon.Launcher;
 import spoon.reflect.CtModel;
+import spoon.reflect.declaration.CtElement;
 import spoon.reflect.declaration.CtField;
 import spoon.reflect.declaration.CtMethod;
 import spoon.reflect.declaration.CtType;
 import spoon.reflect.reference.CtTypeReference;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -30,6 +34,9 @@ import org.slf4j.LoggerFactory;
 
 public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
     private static final Logger LOGGER = LoggerFactory.getLogger(JavaSourceProjectAnalyzer.class);
+    private static final String MAVEN_CLASSPATH_GOAL =
+            "org.apache.maven.plugins:maven-dependency-plugin:3.6.1:build-classpath";
+
     @Override
     public String getDisplayName() {
         return "Java Source Project Analyzer";
@@ -60,13 +67,8 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
             throw new IllegalArgumentException("Source path does not exist: " + sourcePath);
         }
 
-        Launcher launcher = new Launcher();
-        launcher.addInputResource(sourcePath.toString());
-        launcher.getEnvironment().setNoClasspath(true);
-        launcher.getEnvironment().setCommentEnabled(false);
-        launcher.getEnvironment().setIgnoreSyntaxErrors(true);
-
-        CtModel model = launcher.buildModel();
+        List<String> sourceClasspath = resolveSourceClasspath(projectRoot);
+        CtModel model = buildModel(sourcePath, sourceClasspath, projectRoot);
         List<ClassMetrics> rows = new ArrayList<>();
         List<DependencyRelation> classCouplings = new ArrayList<>();
         Set<String> classCouplingKeys = new HashSet<>();
@@ -82,41 +84,46 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
         }
 
         for (CtType<?> type : model.getAllTypes()) {
-            if (type.getQualifiedName().startsWith("java.")) {
+            String qualifiedName = type.getQualifiedName();
+            if (qualifiedName == null || qualifiedName.startsWith("java.")) {
                 continue;
             }
 
-            int loc = calculateLinesOfCode(type);
-            int methods = type.getMethods().size();
-            int fields = type.getFields().size();
-            int coupling = calculateEfferentCoupling(type);
-            double lcom = calculateLcom(type);
-            int complexity = calculateCyclomaticComplexity(type);
-            int wmc = calculateWmc(type);
-            int rfc = calculateRfc(type);
-            double maintainability = calculateMaintainabilityIndex(type, loc, complexity);
+            try {
+                int loc = calculateLinesOfCode(type);
+                int methods = type.getMethods().size();
+                int fields = type.getFields().size();
+                int coupling = calculateEfferentCoupling(type);
+                double lcom = calculateLcom(type);
+                int complexity = calculateCyclomaticComplexity(type);
+                int wmc = calculateWmc(type);
+                int rfc = calculateRfc(type);
+                double maintainability = calculateMaintainabilityIndex(type, loc, complexity);
 
-            rows.add(new ClassMetrics(
-                    safePackageName(type),
-                    type.getSimpleName(),
-                    loc,
-                    methods,
-                    fields,
-                    coupling,
-                    lcom,
-                    complexity,
-                    wmc,
-                    rfc,
-                    maintainability
-            ));
+                rows.add(new ClassMetrics(
+                        safePackageName(type),
+                        type.getSimpleName(),
+                        loc,
+                        methods,
+                        fields,
+                        coupling,
+                        lcom,
+                        complexity,
+                        wmc,
+                        rfc,
+                        maintainability
+                ));
 
-            String sourceType = type.getQualifiedName();
-            Set<String> usedTypes = extractInternalUsedTypeNames(type, projectTypeNames);
-            for (String targetType : usedTypes) {
-                String key = sourceType + "->" + targetType;
-                if (classCouplingKeys.add(key)) {
-                    classCouplings.add(new DependencyRelation(sourceType, targetType));
+                Set<String> usedTypes = extractInternalUsedTypeNames(type, projectTypeNames);
+                for (String targetType : usedTypes) {
+                    String key = qualifiedName + "->" + targetType;
+                    if (classCouplingKeys.add(key)) {
+                        classCouplings.add(new DependencyRelation(qualifiedName, targetType));
+                    }
                 }
+            } catch (RuntimeException ex) {
+                LOGGER.warn("Skipping metrics for type {} because Spoon could not fully resolve it: {}",
+                        qualifiedName, ex.getMessage());
             }
         }
 
@@ -125,9 +132,123 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
         return new AnalysisResult(sourcePath, rows, classCouplings, packageCouplings);
     }
 
+    private static CtModel buildModel(Path sourcePath, List<String> sourceClasspath, Path projectRoot) {
+        try {
+            return createLauncher(sourcePath, sourceClasspath).buildModel();
+        } catch (RuntimeException ex) {
+            if (sourceClasspath.isEmpty()) {
+                throw ex;
+            }
+            LOGGER.warn("Spoon model build with Maven classpath failed for {}. Falling back to no-classpath mode: {}",
+                    projectRoot, ex.getMessage());
+            return createLauncher(sourcePath, List.of()).buildModel();
+        }
+    }
+
+    private static Launcher createLauncher(Path sourcePath, List<String> sourceClasspath) {
+        Launcher launcher = new Launcher();
+        launcher.addInputResource(sourcePath.toString());
+        launcher.getEnvironment().setCommentEnabled(false);
+        launcher.getEnvironment().setIgnoreSyntaxErrors(true);
+        launcher.getEnvironment().setNoClasspath(sourceClasspath.isEmpty());
+        if (!sourceClasspath.isEmpty()) {
+            launcher.getEnvironment().setSourceClasspath(sourceClasspath.toArray(String[]::new));
+        }
+        return launcher;
+    }
+
+    static List<String> parseClasspathEntries(String rawClasspath) {
+        if (rawClasspath == null || rawClasspath.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(rawClasspath.split(Pattern.quote(File.pathSeparator)))
+                .map(String::trim)
+                .filter(entry -> !entry.isBlank())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> resolveSourceClasspath(Path projectRoot) {
+        if (ProjectTypeDetector.detect(projectRoot) != ProjectType.JAVA_MAVEN) {
+            return List.of();
+        }
+
+        List<String> entries = new ArrayList<>();
+        addClasspathEntryIfExists(entries, projectRoot.resolve("target").resolve("classes"));
+        addClasspathEntryIfExists(entries, projectRoot.resolve("target").resolve("test-classes"));
+        addClasspathEntryIfExists(entries, projectRoot.resolve("target").resolve("generated-sources").resolve("annotations"));
+
+        Path classpathFile = null;
+        Path logFile = null;
+        try {
+            classpathFile = Files.createTempFile("metrics-analyzer-maven-classpath", ".txt");
+            List<String> command = List.of(
+                    resolveMavenCommand(projectRoot),
+                    MAVEN_CLASSPATH_GOAL,
+                    "-DincludeScope=compile",
+                    "-Dmdep.outputFile=" + classpathFile.toAbsolutePath(),
+                    "-q"
+            );
+            ServicePackageStaticAnalyzerSupport.ProcessExecution execution =
+                    ServicePackageStaticAnalyzerSupport.runCommand(projectRoot, "spoon-maven-classpath", command);
+            logFile = execution.getLogFile();
+            if (execution.getExitCode() != 0) {
+                LOGGER.warn("Could not resolve Maven classpath for {} (exit code {}). Log tail: {}",
+                        projectRoot,
+                        execution.getExitCode(),
+                        ServicePackageStaticAnalyzerSupport.getLogTail(logFile, 10));
+                return entries;
+            }
+
+            entries.addAll(parseClasspathEntries(Files.readString(classpathFile))
+                    .stream()
+                    .filter(JavaSourceProjectAnalyzer::classpathEntryExists)
+                    .collect(Collectors.toList()));
+        } catch (Exception ex) {
+            LOGGER.warn("Failed to resolve Maven classpath for {}: {}", projectRoot, ex.getMessage());
+        } finally {
+            if (classpathFile != null) {
+                ServicePackageStaticAnalyzerSupport.deleteFileQuietly(classpathFile);
+            }
+            if (logFile != null) {
+                ServicePackageStaticAnalyzerSupport.deleteFileQuietly(logFile);
+            }
+        }
+
+        List<String> distinctEntries = entries.stream().distinct().collect(Collectors.toList());
+        if (!distinctEntries.isEmpty()) {
+            LOGGER.info("Resolved {} Maven classpath entries for {}", distinctEntries.size(), projectRoot);
+        }
+        return distinctEntries;
+    }
+
+    private static void addClasspathEntryIfExists(List<String> entries, Path path) {
+        if (Files.exists(path)) {
+            entries.add(path.toAbsolutePath().normalize().toString());
+        }
+    }
+
+    private static boolean classpathEntryExists(String entry) {
+        try {
+            return Files.exists(Path.of(entry));
+        } catch (RuntimeException ex) {
+            LOGGER.debug("Ignoring invalid classpath entry {}: {}", entry, ex.getMessage());
+            return false;
+        }
+    }
+
+    private static String resolveMavenCommand(Path projectRoot) {
+        boolean windows = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win");
+        Path wrapper = projectRoot.resolve(windows ? "mvnw.cmd" : "mvnw");
+        if (Files.isRegularFile(wrapper)) {
+            return wrapper.toAbsolutePath().normalize().toString();
+        }
+        return ServicePackageStaticAnalyzerSupport.getMavenCommand();
+    }
+
     private static Set<String> extractInternalUsedTypeNames(CtType<?> type, Set<String> projectTypeNames) {
         Set<String> result = new HashSet<>();
-        for (CtTypeReference<?> usedType : type.getUsedTypes(false)) {
+        for (CtTypeReference<?> usedType : safeUsedTypes(type)) {
             String targetName = usedType.getQualifiedName();
             if (targetName == null || targetName.isBlank()) {
                 continue;
@@ -181,11 +302,14 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
     }
 
     private static int calculateLinesOfCode(CtType<?> type) {
-        return type.toString().split("\\R").length;
+        if (type.getPosition() != null && type.getPosition().isValidPosition()) {
+            return Math.max(1, type.getPosition().getEndLine() - type.getPosition().getLine() + 1);
+        }
+        return safeElementText(type).split("\\R").length;
     }
 
     private static int calculateEfferentCoupling(CtType<?> type) {
-        Set<CtTypeReference<?>> usedTypes = type.getUsedTypes(false);
+        Set<CtTypeReference<?>> usedTypes = safeUsedTypes(type);
         return (int) usedTypes.stream()
                 .map(CtTypeReference::getQualifiedName)
                 .filter(name -> name != null && !name.isBlank())
@@ -207,7 +331,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
 
         int[][] matrix = new int[methods.size()][fields.size()];
         for (int i = 0; i < methods.size(); i++) {
-            String body = methods.get(i).getBody() == null ? "" : methods.get(i).getBody().toString();
+            String body = safeElementText(methods.get(i).getBody());
             for (int j = 0; j < fields.size(); j++) {
                 String field = fields.get(j).getSimpleName();
                 if (body.contains(field)) {
@@ -240,7 +364,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
     private static int calculateCyclomaticComplexity(CtType<?> type) {
         int totalDecisionPoints = 0;
         for (CtMethod<?> method : type.getMethods()) {
-            String body = method.getBody() == null ? "" : method.getBody().toString();
+            String body = safeElementText(method.getBody());
             totalDecisionPoints += countDecisionPoints(body);
         }
         return Math.max(1, totalDecisionPoints);
@@ -249,7 +373,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
     private static int calculateWmc(CtType<?> type) {
         int total = 0;
         for (CtMethod<?> method : type.getMethods()) {
-            String body = method.getBody() == null ? "" : method.getBody().toString();
+            String body = safeElementText(method.getBody());
             total += countDecisionPoints(body) + 1;
         }
         return total;
@@ -259,7 +383,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
         Set<String> calls = new LinkedHashSet<>();
         Pattern callPattern = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*\\s*\\(");
         for (CtMethod<?> method : type.getMethods()) {
-            String body = method.getBody() == null ? "" : method.getBody().toString();
+            String body = safeElementText(method.getBody());
             Matcher matcher = callPattern.matcher(body);
             while (matcher.find()) {
                 String token = matcher.group().replaceAll("\\s*\\($", "");
@@ -298,7 +422,7 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
     }
 
     private static double calculateHalsteadVolume(CtType<?> type) {
-        String code = type.toString();
+        String code = safeElementText(type);
         if (code.isBlank()) {
             return 0.0;
         }
@@ -339,6 +463,43 @@ public class JavaSourceProjectAnalyzer implements MetricsAnalyzerService {
             return 0.0;
         }
         return length * (Math.log(vocabulary) / Math.log(2.0));
+    }
+
+    private static Set<CtTypeReference<?>> safeUsedTypes(CtType<?> type) {
+        try {
+            return type.getUsedTypes(false);
+        } catch (RuntimeException ex) {
+            LOGGER.warn("Could not compute used types for {}: {}", type.getQualifiedName(), ex.getMessage());
+            return Set.of();
+        }
+    }
+
+    private static String safeElementText(CtElement element) {
+        if (element == null) {
+            return "";
+        }
+
+        try {
+            if (element.getPosition() != null
+                    && element.getPosition().isValidPosition()
+                    && element.getPosition().getCompilationUnit() != null) {
+                String originalSource = element.getPosition().getCompilationUnit().getOriginalSourceCode();
+                int start = element.getPosition().getSourceStart();
+                int end = element.getPosition().getSourceEnd();
+                if (originalSource != null && start >= 0 && end >= start && end < originalSource.length()) {
+                    return originalSource.substring(start, end + 1);
+                }
+            }
+        } catch (RuntimeException ex) {
+            LOGGER.debug("Could not read original source for Spoon element: {}", ex.getMessage());
+        }
+
+        try {
+            return element.toString();
+        } catch (RuntimeException ex) {
+            LOGGER.warn("Could not render Spoon element as source text: {}", ex.getMessage());
+            return "";
+        }
     }
 
     private static boolean isKeyword(String token) {

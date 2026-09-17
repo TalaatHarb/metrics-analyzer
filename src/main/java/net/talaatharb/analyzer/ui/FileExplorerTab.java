@@ -2060,6 +2060,13 @@ public class FileExplorerTab {
         breadcrumbsLabel.setText("Path: -");
     }
 
+    public void navigateToFile(Path filePath) {
+        if (filePath == null || !Files.isRegularFile(filePath)) {
+            return;
+        }
+        loadFileContent(filePath);
+    }
+
     private static final class CompileCheckResult {
         private final boolean success;
         private final String logTail;
