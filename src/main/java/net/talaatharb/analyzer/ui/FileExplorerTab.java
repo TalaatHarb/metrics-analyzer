@@ -1,74 +1,5 @@
 package net.talaatharb.analyzer.ui;
 
-import javafx.collections.ObservableList;
-import javafx.scene.control.Tab;
-import javafx.scene.control.TreeCell;
-import javafx.scene.control.TreeItem;
-import javafx.scene.control.TreeView;
-import javafx.scene.control.TableView;
-import javafx.scene.control.TableColumn;
-import javafx.scene.control.ProgressIndicator;
-import javafx.scene.control.SplitPane;
-import javafx.beans.property.ReadOnlyObjectWrapper;
-import javafx.beans.property.ReadOnlyStringWrapper;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.VBox;
-import javafx.geometry.Insets;
-import org.fxmisc.richtext.CodeArea;
-import org.fxmisc.richtext.LineNumberFactory;
-import org.fxmisc.flowless.VirtualizedScrollPane;
-import net.talaatharb.analyzer.model.StaticIssue;
-import net.talaatharb.analyzer.service.StaticAnalyzer;
-import net.talaatharb.analyzer.service.BasicStaticAnalyzer;
-import net.talaatharb.analyzer.service.CommunicationPatternAnalyzer;
-import net.talaatharb.analyzer.service.MissingThingsAnalyzer;
-import net.talaatharb.analyzer.service.PMDStaticAnalyzer;
-import net.talaatharb.analyzer.service.CheckstyleStaticAnalyzer;
-import net.talaatharb.analyzer.service.SpotBugsStaticAnalyzer;
-import net.talaatharb.analyzer.service.FindBugsStaticAnalyzer;
-import net.talaatharb.analyzer.service.FindSecBugsStaticAnalyzer;
-import net.talaatharb.analyzer.service.GitChangeHotspotAnalyzer;
-import net.talaatharb.analyzer.service.InferStaticAnalyzer;
-import net.talaatharb.analyzer.service.SemgrepSastStaticAnalyzer;
-import net.talaatharb.analyzer.service.JQAssistantStaticAnalyzer;
-import net.talaatharb.analyzer.service.EntryPointAnalyzer;
-import net.talaatharb.analyzer.service.refactoring.ProjectRefactoringState;
-import net.talaatharb.analyzer.service.refactoring.RefactoringAction;
-import net.talaatharb.analyzer.service.refactoring.RefactoringActionFactory;
-import net.talaatharb.analyzer.service.refactoring.RefactoringEngine;
-import net.talaatharb.analyzer.service.refactoring.RefactoringResult;
-import javafx.collections.FXCollections;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.MenuButton;
-import javafx.scene.control.SeparatorMenuItem;
-import javafx.concurrent.Task;
-
-import javafx.scene.control.ContextMenu;
-import javafx.scene.control.ContentDisplay;
-import javafx.scene.control.Hyperlink;
-import javafx.scene.control.IndexRange;
-import javafx.scene.control.MenuItem;
-import javafx.scene.control.TableCell;
-import javafx.scene.control.TableRow;
-import javafx.scene.control.Alert;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.TextArea;
-import javafx.scene.control.TextInputDialog;
-import javafx.scene.control.Tooltip;
-import javafx.scene.input.Clipboard;
-import javafx.scene.input.ClipboardContent;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyEvent;
-import javafx.scene.Node;
-import javafx.stage.FileChooser;
-import javafx.geometry.Pos;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.fxmisc.richtext.model.TwoDimensional.Bias;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -78,26 +9,97 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
-import java.util.List;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntFunction;
-import java.util.stream.StreamSupport;
-import java.util.stream.Collectors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.talaatharb.analyzer.service.refactoring.RefactoringActionType;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+import org.fxmisc.flowless.VirtualizedScrollPane;
+import org.fxmisc.richtext.CodeArea;
+import org.fxmisc.richtext.LineNumberFactory;
+import org.fxmisc.richtext.model.TwoDimensional.Bias;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javafx.beans.property.ReadOnlyObjectWrapper;
+import javafx.beans.property.ReadOnlyStringWrapper;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.ContentDisplay;
+import javafx.scene.control.ContextMenu;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.IndexRange;
+import javafx.scene.control.Label;
+import javafx.scene.control.MenuButton;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.control.Tab;
+import javafx.scene.control.TableCell;
+import javafx.scene.control.TableColumn;
+import javafx.scene.control.TableRow;
+import javafx.scene.control.TableView;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.control.Tooltip;
+import javafx.scene.control.TreeCell;
+import javafx.scene.control.TreeItem;
+import javafx.scene.control.TreeView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser;
+import net.talaatharb.analyzer.model.StaticIssue;
+import net.talaatharb.analyzer.service.BasicStaticAnalyzer;
+import net.talaatharb.analyzer.service.CheckstyleStaticAnalyzer;
+import net.talaatharb.analyzer.service.CommunicationPatternAnalyzer;
 import net.talaatharb.analyzer.service.CoverageReportService;
 import net.talaatharb.analyzer.service.CoverageReportService.CoverageData;
 import net.talaatharb.analyzer.service.CoverageReportService.CoverageLineStatus;
+import net.talaatharb.analyzer.service.EntryPointAnalyzer;
+import net.talaatharb.analyzer.service.FindBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.FindSecBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.GitChangeHotspotAnalyzer;
+import net.talaatharb.analyzer.service.InferStaticAnalyzer;
+import net.talaatharb.analyzer.service.JQAssistantStaticAnalyzer;
+import net.talaatharb.analyzer.service.MissingThingsAnalyzer;
+import net.talaatharb.analyzer.service.PMDStaticAnalyzer;
+import net.talaatharb.analyzer.service.SemgrepSastStaticAnalyzer;
+import net.talaatharb.analyzer.service.SpotBugsStaticAnalyzer;
+import net.talaatharb.analyzer.service.StaticAnalyzer;
+import net.talaatharb.analyzer.service.refactoring.ProjectRefactoringState;
+import net.talaatharb.analyzer.service.refactoring.RefactoringAction;
+import net.talaatharb.analyzer.service.refactoring.RefactoringActionFactory;
+import net.talaatharb.analyzer.service.refactoring.RefactoringActionType;
+import net.talaatharb.analyzer.service.refactoring.RefactoringEngine;
+import net.talaatharb.analyzer.service.refactoring.RefactoringResult;
 
 public class FileExplorerTab {
 	private static final Logger LOGGER = LoggerFactory.getLogger(FileExplorerTab.class);
@@ -107,14 +109,11 @@ public class FileExplorerTab {
 			.compile("^\\[ERROR\\]\\s+(symbol|location):\\s+(.+)$");
 	private final CodeArea codeArea;
 	private final TreeView<File> fileTree;
-	private final Label currentFileLabel;
-	private final Label breadcrumbsLabel;
-	private final Label issueSummaryLabel;
-	private final Label buildStatusLabel;
-	private final Label compileErrorsSummaryLabel;
 	private final ObservableList<CompileErrorRow> compileErrors;
 	private final RefactoringEngine refactoringEngine;
 	private final CoverageReportService coverageReportService;
+	private Tab tab;
+	private TableView<StaticIssue> problemsTable;
 	private Path currentFilePath;
 	private Map<Path, Map<Integer, CoverageLineStatus>> coverageByFile;
 	private Map<Path, CoverageSummary> coverageSummaryByPath;
@@ -132,6 +131,39 @@ public class FileExplorerTab {
 	private MenuItem undoFixMenuItemRef;
 	private String lastSearchQuery;
 
+	@FXML
+	private VBox treeContainer;
+	@FXML
+	private VBox codeScrollContainer;
+	@FXML
+	private VBox problemsTableContainer;
+	@FXML
+	private VBox compileErrorsTableContainer;
+	@FXML
+	private Label currentFileLabel;
+	@FXML
+	private Label breadcrumbsLabel;
+	@FXML
+	private Label issueSummaryLabel;
+	@FXML
+	private Label buildStatusLabel;
+	@FXML
+	private Label compileErrorsSummaryLabel;
+	@FXML
+	private Label coverageStatusLabel;
+	@FXML
+	private ComboBox<StaticAnalyzer> analyzerComboBox;
+	@FXML
+	private ComboBox<String> scopeComboBox;
+	@FXML
+	private MenuButton operationsMenu;
+	@FXML
+	private CheckBox showNewOnlyBox;
+	@FXML
+	private ProgressIndicator analysisProgress;
+	@FXML
+	private ProgressIndicator coverageProgress;
+
 	public FileExplorerTab() {
 		this.coverageReportService = new CoverageReportService();
 		this.coverageByFile = Collections.emptyMap();
@@ -144,66 +176,42 @@ public class FileExplorerTab {
 		this.lastSearchQuery = "";
 		this.fileTree = createFileTree();
 		this.codeArea = createCodeArea();
-		this.currentFileLabel = new Label("File: No file selected");
-		this.breadcrumbsLabel = new Label("Path: -");
-		this.issueSummaryLabel = new Label("Issues: 0");
-		this.buildStatusLabel = new Label("Build: Not checked");
-		this.compileErrorsSummaryLabel = new Label("Compile errors: 0");
 		this.compileErrors = FXCollections.observableArrayList();
 		this.refactoringEngine = RefactoringEngine.createDefault();
 	}
 
 	public Tab createTab(Path projectPath) {
 		this.rootPath = projectPath;
+		if (tab != null) {
+			refreshFileTree(projectPath);
+			return tab;
+		}
 
-		BorderPane content = new BorderPane();
+		BorderPane content = loadContent();
+		initializeViewStructure();
 
-		VBox treeContainer = new VBox(fileTree);
-		treeContainer.setPadding(new Insets(8));
-		treeContainer.setMinWidth(0);
-		VBox.setVgrow(fileTree, Priority.ALWAYS);
-		treeContainer.setStyle("-fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;");
-		treeContainer.setPrefWidth(250);
-		fileTree.setMinWidth(0);
-
-		currentFileLabel.setStyle("-fx-font-weight: bold;");
-		breadcrumbsLabel.setStyle("-fx-text-fill: #6b7280;");
-		VBox codeHeader = new VBox(2, currentFileLabel, breadcrumbsLabel);
-		VirtualizedScrollPane<CodeArea> codeScrollPane = new VirtualizedScrollPane<>(codeArea);
-		VBox codeContainer = new VBox(8, codeHeader, codeScrollPane);
-		codeContainer.setPadding(new Insets(8));
-		VBox.setVgrow(codeScrollPane, Priority.ALWAYS);
-
-		TableView<StaticIssue> problemsTable = createProblemsTable();
+		problemsTable = createProblemsTable();
 		TableView<CompileErrorRow> compileErrorsTable = createCompileErrorsTable();
+		problemsTableContainer.getChildren().setAll(problemsTable);
+		VBox.setVgrow(problemsTable, Priority.ALWAYS);
+		compileErrorsTableContainer.getChildren().setAll(compileErrorsTable);
+		VBox.setVgrow(compileErrorsTable, Priority.ALWAYS);
 
-		ComboBox<StaticAnalyzer> analyzerComboBox = new ComboBox<>();
 		List<StaticAnalyzer> allAnalyzers = Arrays.asList(new BasicStaticAnalyzer(), new MissingThingsAnalyzer(),
 				new PMDStaticAnalyzer(), new CheckstyleStaticAnalyzer(), new SpotBugsStaticAnalyzer(),
 				new FindBugsStaticAnalyzer(), new FindSecBugsStaticAnalyzer(), new InferStaticAnalyzer(),
 				new SemgrepSastStaticAnalyzer(), new JQAssistantStaticAnalyzer(), new GitChangeHotspotAnalyzer(),
 				new CommunicationPatternAnalyzer(), new EntryPointAnalyzer());
-		analyzerComboBox.getItems().addAll(allAnalyzers);
+		analyzerComboBox.getItems().setAll(allAnalyzers);
 		analyzerComboBox.getSelectionModel().selectFirst();
-		ComboBox<String> scopeComboBox = new ComboBox<>();
-		scopeComboBox.getItems().addAll("Project", "Module/Folder", "Current File");
+		scopeComboBox.getItems().setAll("Project", "Module/Folder", "Current File");
 		scopeComboBox.getSelectionModel().selectFirst();
 
-		ProgressIndicator analysisProgress = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
-		analysisProgress.setPrefSize(16, 16);
 		analysisProgress.setVisible(false);
 		analysisProgress.setManaged(false);
-		ProgressIndicator coverageProgress = new ProgressIndicator(ProgressIndicator.INDETERMINATE_PROGRESS);
-		coverageProgress.setPrefSize(16, 16);
 		coverageProgress.setVisible(false);
 		coverageProgress.setManaged(false);
-		issueSummaryLabel.setStyle("-fx-text-fill: #6b7280;");
-		buildStatusLabel.setStyle("-fx-text-fill: #6b7280;");
-		compileErrorsSummaryLabel.setStyle("-fx-text-fill: #6b7280;");
-		Label coverageStatusLabel = new Label("Coverage: Not loaded");
-		coverageStatusLabel.setStyle("-fx-text-fill: #6b7280;");
 
-		MenuButton operationsMenu = new MenuButton("Operations");
 		MenuItem scanMenuItem = new MenuItem("Scan for Problems");
 		MenuItem exportIssuesMenuItem = new MenuItem("Export Visible Issues as CSV");
 		MenuItem setBaselineMenuItem = new MenuItem("Set Baseline From Current Results");
@@ -215,7 +223,7 @@ public class FileExplorerTab {
 		MenuItem reloadFileMenuItem = new MenuItem("Reload Current File");
 		MenuItem generateCoverageMenuItem = new MenuItem("Generate Coverage");
 		MenuItem clearCoverageMenuItem = new MenuItem("Clear Coverage Info");
-		operationsMenu.getItems().addAll(scanMenuItem, exportIssuesMenuItem, setBaselineMenuItem, fixSafeIssuesMenuItem,
+		operationsMenu.getItems().setAll(scanMenuItem, exportIssuesMenuItem, setBaselineMenuItem, fixSafeIssuesMenuItem,
 				undoFixMenuItem, new SeparatorMenuItem(), saveFileMenuItem, reloadFileMenuItem, new SeparatorMenuItem(),
 				generateCoverageMenuItem, clearCoverageMenuItem);
 
@@ -272,7 +280,6 @@ public class FileExplorerTab {
 			}
 		});
 
-		javafx.scene.control.CheckBox showNewOnlyBox = new javafx.scene.control.CheckBox("Show New Issues Only");
 		showNewOnlyBox.selectedProperty().addListener((_, _, newVal) -> {
 			showNewIssuesOnly = newVal;
 			applyIssueFilter(problemsTable);
@@ -291,45 +298,35 @@ public class FileExplorerTab {
 
 		clearCoverageMenuItem.setOnAction(_ -> clearCoverageInfo(coverageStatusLabel));
 
-		HBox controls = new HBox(8, new Label("Analyzer:"), analyzerComboBox, new Label("Scope:"), scopeComboBox,
-				showNewOnlyBox, operationsMenu, analysisProgress, coverageProgress, issueSummaryLabel, buildStatusLabel,
-				coverageStatusLabel);
-		controls.setAlignment(Pos.CENTER_LEFT);
-
-		Label compileErrorsHeader = new Label("Compile Errors");
-		compileErrorsHeader.setStyle("-fx-font-weight: bold;");
-		HBox compileErrorsMeta = new HBox(8, compileErrorsHeader, compileErrorsSummaryLabel);
-		compileErrorsMeta.setAlignment(Pos.CENTER_LEFT);
-		VBox compileErrorsContainer = new VBox(4, compileErrorsMeta, compileErrorsTable);
-		compileErrorsTable.setPrefHeight(140);
-		compileErrorsTable.setMinHeight(100);
-
-		VBox problemsContainer = new VBox(8, controls, problemsTable, compileErrorsContainer);
-		problemsContainer.setPadding(new Insets(8));
-		VBox.setVgrow(problemsTable, Priority.ALWAYS);
-
-		SplitPane splitPane = new SplitPane();
-		splitPane.setOrientation(javafx.geometry.Orientation.VERTICAL);
-		splitPane.getItems().addAll(codeContainer, problemsContainer);
-		splitPane.setDividerPositions(0.7);
-
-		SplitPane horizontalSplit = new SplitPane();
-		horizontalSplit.setOrientation(javafx.geometry.Orientation.HORIZONTAL);
-		horizontalSplit.getItems().addAll(treeContainer, splitPane);
-		horizontalSplit.setDividerPositions(0.22);
-		splitPane.setMinWidth(0);
-
-		content.setCenter(horizontalSplit);
-
 		// Apply CSS stylesheet for syntax highlighting
 		String cssResource = getClass().getResource("/syntax-highlighting.css").toExternalForm();
 		content.getStylesheets().add(cssResource);
 
 		refreshFileTree(projectPath);
 
-		Tab tab = new Tab("File Explorer", content);
+		tab = new Tab("File Explorer", content);
 		tab.setClosable(false);
 		return tab;
+	}
+
+	private BorderPane loadContent() {
+		FXMLLoader loader = new FXMLLoader(getClass().getResource("FileExplorerTab.fxml"));
+		loader.setController(this);
+		try {
+			return loader.load();
+		} catch (IOException ex) {
+			throw new IllegalStateException("Failed to load FileExplorerTab.fxml", ex);
+		}
+	}
+
+	private void initializeViewStructure() {
+		treeContainer.getChildren().setAll(fileTree);
+		VBox.setVgrow(fileTree, Priority.ALWAYS);
+		fileTree.setMinWidth(0);
+
+		VirtualizedScrollPane<CodeArea> codeScrollPane = new VirtualizedScrollPane<>(codeArea);
+		codeScrollContainer.getChildren().setAll(codeScrollPane);
+		VBox.setVgrow(codeScrollPane, Priority.ALWAYS);
 	}
 
 	private TableView<StaticIssue> createProblemsTable() {

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.embed.swing.SwingNode?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml">
+    <top>
+        <VBox spacing="8.0" BorderPane.alignment="CENTER">
+            <padding>
+                <Insets top="12.0" right="12.0" bottom="0.0" left="12.0" />
+            </padding>
+            <children>
+                <HBox spacing="10.0">
+                    <children>
+                        <Label text="View:" />
+                        <ComboBox fx:id="graphLevelCombo" />
+                    </children>
+                </HBox>
+                <Label text="Gray edges: one-way coupling | Red edges: two-way coupling" />
+            </children>
+        </VBox>
+    </top>
+    <center>
+        <SwingNode fx:id="graphNode">
+            <BorderPane.margin>
+                <Insets top="12.0" right="12.0" bottom="12.0" left="12.0" />
+            </BorderPane.margin>
+        </SwingNode>
+    </center>
+</BorderPane>

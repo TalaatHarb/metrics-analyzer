@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.MenuButton?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.control.SplitPane?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.Priority?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/21" xmlns:fx="http://javafx.com/fxml">
+    <center>
+        <SplitPane dividerPositions="0.22">
+            <items>
+                <VBox fx:id="treeContainer" prefWidth="250.0" minWidth="0.0" style="-fx-border-color: #e0e0e0; -fx-border-width: 0 1 0 0;">
+                    <padding>
+                        <Insets top="8.0" right="8.0" bottom="8.0" left="8.0" />
+                    </padding>
+                </VBox>
+                <SplitPane orientation="VERTICAL" dividerPositions="0.7" minWidth="0.0">
+                    <items>
+                        <VBox spacing="8.0">
+                            <padding>
+                                <Insets top="8.0" right="8.0" bottom="8.0" left="8.0" />
+                            </padding>
+                            <children>
+                                <VBox spacing="2.0">
+                                    <children>
+                                        <Label fx:id="currentFileLabel" text="File: No file selected" style="-fx-font-weight: bold;" />
+                                        <Label fx:id="breadcrumbsLabel" text="Path: -" style="-fx-text-fill: #6b7280;" />
+                                    </children>
+                                </VBox>
+                                <VBox fx:id="codeScrollContainer" VBox.vgrow="ALWAYS" />
+                            </children>
+                        </VBox>
+                        <VBox spacing="8.0">
+                            <padding>
+                                <Insets top="8.0" right="8.0" bottom="8.0" left="8.0" />
+                            </padding>
+                            <children>
+                                <HBox spacing="8.0" alignment="CENTER_LEFT">
+                                    <children>
+                                        <Label text="Analyzer:" />
+                                        <ComboBox fx:id="analyzerComboBox" />
+                                        <Label text="Scope:" />
+                                        <ComboBox fx:id="scopeComboBox" />
+                                        <CheckBox fx:id="showNewOnlyBox" text="Show New Issues Only" />
+                                        <MenuButton fx:id="operationsMenu" text="Operations" />
+                                        <ProgressIndicator fx:id="analysisProgress" progress="-1.0" prefWidth="16.0" prefHeight="16.0" maxWidth="16.0" maxHeight="16.0" visible="false" managed="false" />
+                                        <ProgressIndicator fx:id="coverageProgress" progress="-1.0" prefWidth="16.0" prefHeight="16.0" maxWidth="16.0" maxHeight="16.0" visible="false" managed="false" />
+                                        <Label fx:id="issueSummaryLabel" text="Issues: 0" style="-fx-text-fill: #6b7280;" />
+                                        <Label fx:id="buildStatusLabel" text="Build: Not checked" style="-fx-text-fill: #6b7280;" />
+                                        <Label fx:id="coverageStatusLabel" text="Coverage: Not loaded" style="-fx-text-fill: #6b7280;" />
+                                    </children>
+                                </HBox>
+                                <VBox fx:id="problemsTableContainer" VBox.vgrow="ALWAYS" />
+                                <VBox spacing="4.0">
+                                    <children>
+                                        <HBox spacing="8.0" alignment="CENTER_LEFT">
+                                            <children>
+                                                <Label text="Compile Errors" style="-fx-font-weight: bold;" />
+                                                <Label fx:id="compileErrorsSummaryLabel" text="Compile errors: 0" style="-fx-text-fill: #6b7280;" />
+                                            </children>
+                                        </HBox>
+                                        <VBox fx:id="compileErrorsTableContainer" minHeight="100.0" prefHeight="140.0" VBox.vgrow="ALWAYS" />
+                                    </children>
+                                </VBox>
+                            </children>
+                        </VBox>
+                    </items>
+                </SplitPane>
+            </items>
+        </SplitPane>
+    </center>
+</BorderPane>

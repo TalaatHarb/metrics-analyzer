@@ -1,11 +1,13 @@
 package net.talaatharb.analyzer.ui;
 
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
 import javafx.beans.property.ReadOnlyIntegerWrapper;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
+import javafx.scene.Parent;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
@@ -15,7 +17,6 @@ import javafx.scene.control.TableRow;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.Tooltip;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -37,9 +38,14 @@ public class MetricsTab {
     private final ObservableList<ClassMetrics> rows = FXCollections.observableArrayList();
     private final Consumer<ClassMetrics> classNavigationHandler;
 
+    @FXML
     private TableView<ClassMetrics> table;
+    @FXML
     private TextArea summaryArea;
+    @FXML
     private Button exportMetricsButton;
+    @FXML
+    private VBox tableContainer;
     private Path projectPath;
     private HealthSnapshot previousHealthSnapshot;
     private Tab tab;
@@ -53,29 +59,30 @@ public class MetricsTab {
             return tab;
         }
 
+        Parent content = loadContent();
         table = createTable();
-        summaryArea = new TextArea();
-        summaryArea.setEditable(false);
-        summaryArea.setWrapText(true);
-        summaryArea.setPrefRowCount(8);
+        VBox.setVgrow(table, Priority.ALWAYS);
+        tableContainer.getChildren().add(table);
 
-        exportMetricsButton = new Button("Export as CSV");
         exportMetricsButton.setDisable(true);
         exportMetricsButton.setOnAction(_ -> exportMetricsAsCsv());
 
         rows.addListener((javafx.collections.ListChangeListener<? super ClassMetrics>) _ ->
                 exportMetricsButton.setDisable(rows.isEmpty()));
 
-        HBox buttonBar = new HBox(10, exportMetricsButton);
-        buttonBar.setPadding(new Insets(8, 0, 0, 0));
-
-        VBox content = new VBox(10, buttonBar, table, new Label("Summary"), summaryArea);
-        content.setPadding(new Insets(12));
-        VBox.setVgrow(table, Priority.ALWAYS);
-
         tab = new Tab("Metrics", content);
         tab.setClosable(false);
         return tab;
+    }
+
+    private Parent loadContent() {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("MetricsTab.fxml"));
+        loader.setController(this);
+        try {
+            return loader.load();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to load MetricsTab.fxml", ex);
+        }
     }
 
     public void setProjectPath(Path projectPath) {

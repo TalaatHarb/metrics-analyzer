@@ -3,16 +3,30 @@ package net.talaatharb.analyzer.ui;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
-import javafx.geometry.Insets;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
 import javafx.concurrent.Task;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.geometry.Insets;
+import javafx.scene.Parent;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogPane;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
+import javafx.scene.control.ListView;
+import javafx.scene.control.Tab;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.VBox;
 import org.fxmisc.flowless.VirtualizedScrollPane;
 import org.fxmisc.richtext.CodeArea;
 import org.fxmisc.richtext.LineNumberFactory;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -20,58 +34,52 @@ import java.util.Arrays;
 import java.util.List;
 
 public class GitCommitsTab {
-    private Path projectPath;
-    private ComboBox<String> branchComboBox;
-    private ListView<CommitInfo> commitListView;
-    private ObservableList<CommitInfo> commits;
-    private Button loadMoreButton;
-    private Label currentBranchLabel;
-    
-    private int offset = 0;
     private static final int LIMIT = 50;
+
+    private Path projectPath;
+    private ObservableList<CommitInfo> commits;
+    private Tab tab;
+    private int offset = 0;
     private String currentBranch = "";
+
+    @FXML
+    private ComboBox<String> branchComboBox;
+    @FXML
+    private ListView<CommitInfo> commitListView;
+    @FXML
+    private Button loadMoreButton;
+    @FXML
+    private Label currentBranchLabel;
+    @FXML
+    private Button switchButton;
+    @FXML
+    private Button refreshButton;
+    @FXML
+    private Button diffButton;
 
     public Tab createTab(Path projectPath) {
         this.projectPath = projectPath;
-        this.commits = FXCollections.observableArrayList();
-        
-        BorderPane content = new BorderPane();
-        content.setPadding(new Insets(10));
-        
-        // Top Controls
-        HBox topControls = new HBox(10);
-        topControls.setPadding(new Insets(0, 0, 10, 0));
-        topControls.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        
-        currentBranchLabel = new Label("Current Branch: None");
-        currentBranchLabel.setStyle("-fx-font-weight: bold;");
-        
-        branchComboBox = new ComboBox<>();
-        Button switchButton = new Button("Switch Branch");
+        if (tab != null) {
+            if (projectPath != null) {
+                loadGitData();
+            }
+            return tab;
+        }
+
+        commits = FXCollections.observableArrayList();
+        Parent content = loadContent();
+
         switchButton.setOnAction(_ -> {
             String selected = branchComboBox.getValue();
             if (selected != null && !selected.equals(currentBranch)) {
                 switchBranch(selected);
             }
         });
-        Button refreshButton = new Button("Refresh");
         refreshButton.setOnAction(_ -> loadGitData());
-        Button diffButton = new Button("Diff");
         diffButton.setOnAction(_ -> showWorkingTreeDiff());
-        
-        topControls.getChildren().addAll(
-                currentBranchLabel,
-                new Label("  |  Switch to:"),
-                branchComboBox,
-                switchButton,
-                refreshButton,
-                diffButton
-        );
-        content.setTop(topControls);
-        
-        // Commits List
-        commitListView = new ListView<>(commits);
-        commitListView.setCellFactory(_ -> new ListCell<CommitInfo>() {
+
+        commitListView.setItems(commits);
+        commitListView.setCellFactory(_ -> new ListCell<>() {
             @Override
             protected void updateItem(CommitInfo item, boolean empty) {
                 super.updateItem(item, empty);
@@ -87,60 +95,60 @@ public class GitCommitsTab {
                     msgLabel.setWrapText(true);
                     box.getChildren().addAll(hashLabel, msgLabel);
                     setGraphic(box);
-                    
-                    // Robust infinite scroll: trigger load when the last cell is being displayed
-                    if (getIndex() == getListView().getItems().size() - 1 && loadMoreButton.isVisible() && !loadMoreButton.isDisabled()) {
+
+                    if (getIndex() == getListView().getItems().size() - 1
+                            && loadMoreButton.isVisible() && !loadMoreButton.isDisabled()) {
                         Platform.runLater(() -> loadCommits());
                     }
                 }
             }
         });
-        
-        commitListView.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) {
-                CommitInfo selected = commitListView.getSelectionModel().getSelectedItem();
-                if (selected != null) {
-                    showDiffPopup(selected);
-                }
-            }
-        });
-        
-        // Infinite scroll emulation with a scroll bar listener
+
+        commitListView.setOnMouseClicked(this::handleCommitClick);
         commitListView.setOnScroll(_ -> {
             // Alternatively we use the Load More button for robust loading
         });
-        
-        VBox listContainer = new VBox(commitListView);
-        VBox.setVgrow(commitListView, Priority.ALWAYS);
-        
-        loadMoreButton = new Button("Load More Commits");
-        loadMoreButton.setMaxWidth(Double.MAX_VALUE);
+
         loadMoreButton.setOnAction(_ -> loadCommits());
         loadMoreButton.setVisible(false);
-        
-        listContainer.getChildren().add(loadMoreButton);
-        content.setCenter(listContainer);
-        
-        Label instructions = new Label("Double-click a commit to view its diff, or use Diff for working tree changes.");
-        instructions.setPadding(new Insets(5, 0, 0, 0));
-        content.setBottom(instructions);
-        
+
         if (projectPath != null) {
             loadGitData();
         }
-        
-        Tab tab = new Tab("Git Commits", content);
+
+        tab = new Tab("Git Commits", content);
         tab.setClosable(false);
         return tab;
     }
-    
+
     public void setProjectPath(Path path) {
         this.projectPath = path;
         loadGitData();
     }
-    
+
+    private Parent loadContent() {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("GitCommitsTab.fxml"));
+        loader.setController(this);
+        try {
+            return loader.load();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to load GitCommitsTab.fxml", ex);
+        }
+    }
+
+    private void handleCommitClick(MouseEvent event) {
+        if (event.getClickCount() == 2) {
+            CommitInfo selected = commitListView.getSelectionModel().getSelectedItem();
+            if (selected != null) {
+                showDiffPopup(selected);
+            }
+        }
+    }
+
     private boolean isGitRepository(File dir) {
-        if (dir == null || !dir.exists()) return false;
+        if (dir == null || !dir.exists()) {
+            return false;
+        }
         try {
             Process p = new ProcessBuilder("git", "status").directory(dir).start();
             return p.waitFor() == 0;
@@ -150,6 +158,9 @@ public class GitCommitsTab {
     }
 
     private void loadGitData() {
+        if (branchComboBox == null || commitListView == null || loadMoreButton == null || currentBranchLabel == null) {
+            return;
+        }
         if (projectPath == null || !isGitRepository(projectPath.toFile())) {
             Platform.runLater(() -> {
                 currentBranchLabel.setText("Not a Git repository");
@@ -159,8 +170,7 @@ public class GitCommitsTab {
             });
             return;
         }
-        
-        // Load branches
+
         Task<List<String>> branchesTask = new Task<>() {
             @Override
             protected List<String> call() throws Exception {
@@ -173,7 +183,9 @@ public class GitCommitsTab {
                         if (line.startsWith("* ")) {
                             currentBranch = b;
                         }
-                        if (b.startsWith("remotes/origin/HEAD")) continue;
+                        if (b.startsWith("remotes/origin/HEAD")) {
+                            continue;
+                        }
                         branches.add(b);
                     }
                 }
@@ -184,15 +196,14 @@ public class GitCommitsTab {
             branchComboBox.setItems(FXCollections.observableArrayList(branchesTask.getValue()));
             currentBranchLabel.setText("Current Branch: " + currentBranch);
             branchComboBox.getSelectionModel().select(currentBranch);
-            
-            // Reload commits from scratch
+
             offset = 0;
             commits.clear();
             loadCommits();
         });
         new Thread(branchesTask).start();
     }
-    
+
     private void switchBranch(String branchName) {
         String checkoutTarget = branchName;
         if (branchName.startsWith("remotes/origin/")) {
@@ -216,14 +227,15 @@ public class GitCommitsTab {
         });
         new Thread(switchTask).start();
     }
-    
+
     private void loadCommits() {
         loadMoreButton.setDisable(true);
         Task<List<CommitInfo>> commitsTask = new Task<>() {
             @Override
             protected List<CommitInfo> call() throws Exception {
                 List<CommitInfo> newCommits = new ArrayList<>();
-                Process p = new ProcessBuilder("git", "log", "--skip=" + offset, "-n", String.valueOf(LIMIT), "--pretty=format:%h%x09%an%x09%ad%x09%s").directory(projectPath.toFile()).start();
+                Process p = new ProcessBuilder("git", "log", "--skip=" + offset, "-n", String.valueOf(LIMIT),
+                        "--pretty=format:%h%x09%an%x09%ad%x09%s").directory(projectPath.toFile()).start();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
                     String line;
                     while ((line = br.readLine()) != null) {
@@ -245,7 +257,7 @@ public class GitCommitsTab {
         });
         new Thread(commitsTask).start();
     }
-    
+
     private void showDiffPopup(CommitInfo commit) {
         Task<String> diffTask = new Task<>() {
             @Override
@@ -261,9 +273,7 @@ public class GitCommitsTab {
                 return sb.toString();
             }
         };
-        diffTask.setOnSucceeded(_ -> {
-            showDiffDialog("Diff for commit " + commit.hash, diffTask.getValue());
-        });
+        diffTask.setOnSucceeded(_ -> showDiffDialog("Diff for commit " + commit.hash, diffTask.getValue()));
         new Thread(diffTask).start();
     }
 
@@ -344,13 +354,13 @@ public class GitCommitsTab {
         pane.setContent(diffScrollPane);
         dialog.showAndWait();
     }
-    
+
     private static class CommitInfo {
         String hash;
         String author;
         String date;
         String message;
-        
+
         CommitInfo(String hash, String author, String date, String message) {
             this.hash = hash;
             this.author = author;

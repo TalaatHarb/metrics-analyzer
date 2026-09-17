@@ -1,27 +1,27 @@
 package net.talaatharb.analyzer.ui;
 
-import com.mxgraph.layout.hierarchical.mxHierarchicalLayout;
-import com.mxgraph.swing.mxGraphComponent;
-import com.mxgraph.view.mxGraph;
-import javafx.application.Platform;
-import javafx.embed.swing.SwingNode;
-import javafx.geometry.Insets;
-import javafx.scene.control.ComboBox;
-import javafx.scene.control.Label;
-import javafx.scene.control.Tab;
-import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.VBox;
-import net.talaatharb.analyzer.model.AnalysisResult;
-import net.talaatharb.analyzer.model.DependencyRelation;
-
-import javax.swing.SwingUtilities;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import javax.swing.SwingUtilities;
+
+import com.mxgraph.layout.hierarchical.mxHierarchicalLayout;
+import com.mxgraph.swing.mxGraphComponent;
+import com.mxgraph.view.mxGraph;
+
+import javafx.application.Platform;
+import javafx.embed.swing.SwingNode;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.control.ComboBox;
+import javafx.scene.control.Tab;
+import net.talaatharb.analyzer.model.AnalysisResult;
+import net.talaatharb.analyzer.model.DependencyRelation;
 
 public class CouplingGraphTab {
     private static final String GRAPH_CLASS_LEVEL = "Class/File Coupling";
@@ -36,7 +36,9 @@ public class CouplingGraphTab {
             "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#6366f1", "#ec4899", "#14b8a6", "#f43f5e"
     };
 
+    @FXML
     private SwingNode graphNode;
+    @FXML
     private ComboBox<String> graphLevelCombo;
     private AnalysisResult latestResult;
     private Tab tab;
@@ -46,13 +48,11 @@ public class CouplingGraphTab {
             return tab;
         }
 
-        graphLevelCombo = new ComboBox<>();
+        Parent content = loadContent();
         graphLevelCombo.getItems().addAll(GRAPH_CLASS_LEVEL, GRAPH_PACKAGE_LEVEL);
         graphLevelCombo.getSelectionModel().selectFirst();
         graphLevelCombo.setOnAction(_ -> renderCouplingGraph());
 
-        Label legend = new Label("Gray edges: one-way coupling | Red edges: two-way coupling");
-        graphNode = new SwingNode();
         graphNode.boundsInLocalProperty().addListener((_, _, _) -> {
             SwingUtilities.invokeLater(() -> {
                 if (graphNode.getContent() != null) {
@@ -62,23 +62,21 @@ public class CouplingGraphTab {
             });
         });
 
-        VBox controls = new VBox(
-                8,
-                new HBox(10, new Label("View:"), graphLevelCombo),
-                legend
-        );
-        controls.setPadding(new Insets(12, 12, 0, 12));
-
-        BorderPane content = new BorderPane();
-        content.setTop(controls);
-        content.setCenter(graphNode);
-        BorderPane.setMargin(graphNode, new Insets(12));
-
         renderPlaceholder("Run an analysis to visualize coupling relations.");
 
         tab = new Tab("Coupling Graph", content);
         tab.setClosable(false);
         return tab;
+    }
+
+    private Parent loadContent() {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("CouplingGraphTab.fxml"));
+        loader.setController(this);
+        try {
+            return loader.load();
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException("Failed to load CouplingGraphTab.fxml", ex);
+        }
     }
 
     public void setAnalysisResult(AnalysisResult latestResult) {
