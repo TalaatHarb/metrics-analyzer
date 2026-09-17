@@ -49,11 +49,11 @@ public class CouplingGraphTab {
         graphLevelCombo = new ComboBox<>();
         graphLevelCombo.getItems().addAll(GRAPH_CLASS_LEVEL, GRAPH_PACKAGE_LEVEL);
         graphLevelCombo.getSelectionModel().selectFirst();
-        graphLevelCombo.setOnAction(event -> renderCouplingGraph());
+        graphLevelCombo.setOnAction(_ -> renderCouplingGraph());
 
         Label legend = new Label("Gray edges: one-way coupling | Red edges: two-way coupling");
         graphNode = new SwingNode();
-        graphNode.boundsInLocalProperty().addListener((obs, oldBounds, newBounds) -> {
+        graphNode.boundsInLocalProperty().addListener((_, _, _) -> {
             SwingUtilities.invokeLater(() -> {
                 if (graphNode.getContent() != null) {
                     graphNode.getContent().revalidate();

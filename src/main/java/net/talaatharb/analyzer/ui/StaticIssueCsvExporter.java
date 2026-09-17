@@ -40,7 +40,7 @@ final class StaticIssueCsvExporter {
             Function<StaticIssue, String> statusResolver
     ) {
         List<StaticIssue> safeIssues = issues == null ? Collections.emptyList() : issues;
-        Function<StaticIssue, String> safeStatusResolver = statusResolver == null ? issue -> "" : statusResolver;
+        Function<StaticIssue, String> safeStatusResolver = statusResolver == null ? _ -> "" : statusResolver;
         StringBuilder csv = new StringBuilder();
         csv.append("file,line,description,severity,status,category,ruleId,tool,confidence,fixability,suggestedFix,effort,tags")
                 .append(System.lineSeparator());

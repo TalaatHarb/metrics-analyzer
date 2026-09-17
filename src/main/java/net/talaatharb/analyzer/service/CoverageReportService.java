@@ -150,7 +150,7 @@ public class CoverageReportService {
                     Element sourceFile = (Element) sourceFiles.item(j);
                     String sourceName = sourceFile.getAttribute("name");
                     Path filePath = resolveReportPath(rootPath, packageName, sourceName);
-                    Map<Integer, CoverageLineStatus> fileMap = linesByFile.computeIfAbsent(filePath, ignored -> new HashMap<>());
+                    Map<Integer, CoverageLineStatus> fileMap = linesByFile.computeIfAbsent(filePath, _ -> new HashMap<>());
                     NodeList lineNodes = sourceFile.getElementsByTagName("line");
                     for (int k = 0; k < lineNodes.getLength(); k++) {
                         Element line = (Element) lineNodes.item(k);
@@ -184,7 +184,7 @@ public class CoverageReportService {
                 Element classElement = (Element) classNodes.item(i);
                 String filename = classElement.getAttribute("filename");
                 Path filePath = resolveCoberturaPath(rootPath, filename);
-                Map<Integer, CoverageLineStatus> fileMap = linesByFile.computeIfAbsent(filePath, ignored -> new HashMap<>());
+                Map<Integer, CoverageLineStatus> fileMap = linesByFile.computeIfAbsent(filePath, _ -> new HashMap<>());
 
                 NodeList lineNodes = classElement.getElementsByTagName("line");
                 for (int j = 0; j < lineNodes.getLength(); j++) {
@@ -218,7 +218,7 @@ public class CoverageReportService {
         setFeatureIfSupported(dbFactory, "http://xml.org/sax/features/external-general-entities", false);
         setFeatureIfSupported(dbFactory, "http://xml.org/sax/features/external-parameter-entities", false);
         DocumentBuilder dBuilder = dbFactory.newDocumentBuilder();
-        dBuilder.setEntityResolver((publicId, systemId) -> new InputSource(new StringReader("")));
+        dBuilder.setEntityResolver((_, _) -> new InputSource(new StringReader("")));
         Document doc = dBuilder.parse(reportPath.toFile());
         doc.getDocumentElement().normalize();
         return doc;

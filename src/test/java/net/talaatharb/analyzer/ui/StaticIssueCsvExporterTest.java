@@ -1,15 +1,15 @@
 package net.talaatharb.analyzer.ui;
 
-import net.talaatharb.analyzer.model.StaticIssue;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import net.talaatharb.analyzer.model.StaticIssue;
 
 class StaticIssueCsvExporterTest {
 
@@ -33,7 +33,7 @@ class StaticIssueCsvExporterTest {
                 "open"
         );
 
-        String csv = StaticIssueCsvExporter.buildCsvContent(root, List.of(issue), ignored -> "New");
+        String csv = StaticIssueCsvExporter.buildCsvContent(root, List.of(issue), _ -> "New");
 
         String header = "file,line,description,severity,status,category,ruleId,tool,confidence,fixability,suggestedFix,effort,tags";
         assertTrue(csv.startsWith(header + System.lineSeparator()));
@@ -49,7 +49,7 @@ class StaticIssueCsvExporterTest {
         Path target = tempDir.resolve("reports/issues.csv");
         StaticIssue issue = new StaticIssue(tempDir.resolve("A.java"), 3, "Issue", "LOW");
 
-        StaticIssueCsvExporter.export(target, tempDir, List.of(issue), ignored -> "Existing");
+        StaticIssueCsvExporter.export(target, tempDir, List.of(issue), _ -> "Existing");
 
         assertTrue(Files.isRegularFile(target));
         String csv = Files.readString(target);

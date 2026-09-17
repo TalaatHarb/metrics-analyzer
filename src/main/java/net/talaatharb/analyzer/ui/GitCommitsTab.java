@@ -48,16 +48,16 @@ public class GitCommitsTab {
         
         branchComboBox = new ComboBox<>();
         Button switchButton = new Button("Switch Branch");
-        switchButton.setOnAction(e -> {
+        switchButton.setOnAction(_ -> {
             String selected = branchComboBox.getValue();
             if (selected != null && !selected.equals(currentBranch)) {
                 switchBranch(selected);
             }
         });
         Button refreshButton = new Button("Refresh");
-        refreshButton.setOnAction(e -> loadGitData());
+        refreshButton.setOnAction(_ -> loadGitData());
         Button diffButton = new Button("Diff");
-        diffButton.setOnAction(e -> showWorkingTreeDiff());
+        diffButton.setOnAction(_ -> showWorkingTreeDiff());
         
         topControls.getChildren().addAll(
                 currentBranchLabel,
@@ -71,7 +71,7 @@ public class GitCommitsTab {
         
         // Commits List
         commitListView = new ListView<>(commits);
-        commitListView.setCellFactory(param -> new ListCell<CommitInfo>() {
+        commitListView.setCellFactory(_ -> new ListCell<CommitInfo>() {
             @Override
             protected void updateItem(CommitInfo item, boolean empty) {
                 super.updateItem(item, empty);
@@ -106,7 +106,7 @@ public class GitCommitsTab {
         });
         
         // Infinite scroll emulation with a scroll bar listener
-        commitListView.setOnScroll(event -> {
+        commitListView.setOnScroll(_ -> {
             // Alternatively we use the Load More button for robust loading
         });
         
@@ -115,7 +115,7 @@ public class GitCommitsTab {
         
         loadMoreButton = new Button("Load More Commits");
         loadMoreButton.setMaxWidth(Double.MAX_VALUE);
-        loadMoreButton.setOnAction(e -> loadCommits());
+        loadMoreButton.setOnAction(_ -> loadCommits());
         loadMoreButton.setVisible(false);
         
         listContainer.getChildren().add(loadMoreButton);
@@ -180,7 +180,7 @@ public class GitCommitsTab {
                 return branches;
             }
         };
-        branchesTask.setOnSucceeded(e -> {
+        branchesTask.setOnSucceeded(_ -> {
             branchComboBox.setItems(FXCollections.observableArrayList(branchesTask.getValue()));
             currentBranchLabel.setText("Current Branch: " + currentBranch);
             branchComboBox.getSelectionModel().select(currentBranch);
@@ -206,7 +206,7 @@ public class GitCommitsTab {
                 return p.waitFor() == 0;
             }
         };
-        switchTask.setOnSucceeded(e -> {
+        switchTask.setOnSucceeded(_ -> {
             if (switchTask.getValue()) {
                 loadGitData();
             } else {
@@ -236,7 +236,7 @@ public class GitCommitsTab {
                 return newCommits;
             }
         };
-        commitsTask.setOnSucceeded(e -> {
+        commitsTask.setOnSucceeded(_ -> {
             List<CommitInfo> result = commitsTask.getValue();
             commits.addAll(result);
             offset += result.size();
@@ -261,7 +261,7 @@ public class GitCommitsTab {
                 return sb.toString();
             }
         };
-        diffTask.setOnSucceeded(e -> {
+        diffTask.setOnSucceeded(_ -> {
             showDiffDialog("Diff for commit " + commit.hash, diffTask.getValue());
         });
         new Thread(diffTask).start();
@@ -285,8 +285,8 @@ public class GitCommitsTab {
                 return diff;
             }
         };
-        diffTask.setOnSucceeded(e -> showDiffDialog("Working Tree Diff", diffTask.getValue()));
-        diffTask.setOnFailed(e -> {
+        diffTask.setOnSucceeded(_ -> showDiffDialog("Working Tree Diff", diffTask.getValue()));
+        diffTask.setOnFailed(_ -> {
             Throwable ex = diffTask.getException();
             Alert alert = new Alert(Alert.AlertType.ERROR,
                     "Failed to load working tree diff." + (ex == null ? "" : "\n" + ex.getMessage()));

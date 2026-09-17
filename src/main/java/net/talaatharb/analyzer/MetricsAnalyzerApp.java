@@ -51,7 +51,7 @@ public class MetricsAnalyzerApp extends Application {
         Button analyzeButton = new Button("Analyze");
         analyzeButton.setDisable(true);
 
-        chooseButton.setOnAction(event -> {
+        chooseButton.setOnAction(_ -> {
             DirectoryChooser chooser = new DirectoryChooser();
             chooser.setTitle("Select Java Project Folder");
             if (selectedProjectPath != null) {
@@ -73,7 +73,7 @@ public class MetricsAnalyzerApp extends Application {
             }
         });
 
-        analyzeButton.setOnAction(event -> runAnalysis(analyzeButton));
+        analyzeButton.setOnAction(_ -> runAnalysis(analyzeButton));
 
         HBox actions = new HBox(10, chooseButton, analyzeButton);
         VBox top = new VBox(
@@ -123,7 +123,7 @@ public class MetricsAnalyzerApp extends Application {
             }
         };
 
-        task.setOnSucceeded(event -> {
+        task.setOnSucceeded(_ -> {
             AnalysisResult result = task.getValue();
             metricsTab.showAnalysisResult(result);
             statusLabel.setText("Completed: " + result.getClassCount() + " classes analyzed");
@@ -131,7 +131,7 @@ public class MetricsAnalyzerApp extends Application {
             couplingGraphTab.setAnalysisResult(result);
         });
 
-        task.setOnFailed(event -> {
+        task.setOnFailed(_ -> {
             Throwable ex = task.getException();
             String message = ex == null ? "Unknown error" : ex.getMessage();
             statusLabel.setText("Failed");

@@ -61,9 +61,9 @@ public class MetricsTab {
 
         exportMetricsButton = new Button("Export as CSV");
         exportMetricsButton.setDisable(true);
-        exportMetricsButton.setOnAction(event -> exportMetricsAsCsv());
+        exportMetricsButton.setOnAction(_ -> exportMetricsAsCsv());
 
-        rows.addListener((javafx.collections.ListChangeListener<? super ClassMetrics>) change ->
+        rows.addListener((javafx.collections.ListChangeListener<? super ClassMetrics>) _ ->
                 exportMetricsButton.setDisable(rows.isEmpty()));
 
         HBox buttonBar = new HBox(10, exportMetricsButton);
@@ -162,7 +162,7 @@ public class MetricsTab {
         tv.getColumns().addAll(List.of(classCol, pkgCol, locCol, methodCol, fieldCol,
                 couplingCol, lcomCol, ccCol, wmcCol, rfcCol, miCol, debtCol));
 
-        tv.setRowFactory(t -> {
+        tv.setRowFactory(_ -> {
             TableRow<ClassMetrics> row = new TableRow<>() {
                 @Override
                 protected void updateItem(ClassMetrics item, boolean empty) {
