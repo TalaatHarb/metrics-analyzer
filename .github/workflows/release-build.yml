@@ -48,6 +48,38 @@ jobs:
           echo "RENAMED_JAR_PATH=target/$RENAMED_JAR" >> $GITHUB_ENV
         shell: bash
 
+      - name: Package standalone Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v',''
+          $appVersionMatch = [regex]::Match($version, '^\d+(?:\.\d+){0,2}')
+          if (-not $appVersionMatch.Success) {
+            throw "Release tag must start with a numeric version for jpackage: $version"
+          }
+          $appVersion = $appVersionMatch.Value
+          $target = "target"
+          $staging = Join-Path $target "jpackage-input"
+          $imageDestination = Join-Path $target "jpackage-output"
+          $appName = "MetricsAnalyzer"
+          $fatJar = Get-ChildItem -Path "$target\metrics-analyzer-*-jar-with-dependencies.jar" | Select-Object -First 1
+
+          New-Item -ItemType Directory -Path $staging -Force | Out-Null
+          Copy-Item $fatJar.FullName -Destination (Join-Path $staging "metrics-analyzer.jar")
+          jpackage `
+            --type app-image `
+            --input $staging `
+            --name $appName `
+            --main-jar metrics-analyzer.jar `
+            --main-class net.talaatharb.analyzer.MetricsAnalyzerLauncher `
+            --app-version $appVersion `
+            --vendor "Talaat Harb" `
+            --dest $imageDestination
+
+          $portableArchive = Join-Path $target "metrics-analyzer-$version-Windows-portable.zip"
+          Compress-Archive -Path (Join-Path $imageDestination $appName) -DestinationPath $portableArchive
+          "PORTABLE_APP_PATH=target/metrics-analyzer-$version-Windows-portable.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Upload JAR to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -58,5 +90,14 @@ jobs:
             - Built on `${{ runner.os }}`
             - Includes the JAR file with dependencies.
           files: ${{ env.RENAMED_JAR_PATH }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload standalone Windows application to GitHub Release
+        if: runner.os == 'Windows'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: ${{ env.PORTABLE_APP_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
